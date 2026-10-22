@@ -168,6 +168,8 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
 
         glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
         drawSky()
+        // Glows that belong under the ship, so they never hide it.
+        spritePass { if (mode == Mode.HANGAR) hangarPad() else shipUnderglow() }
         glEnable(GL_DEPTH_TEST)
         glDepthMask(true)
         lit.use()
@@ -175,16 +177,20 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
         lit.v3("uEye", sx, sy, camZ)
         if (mode == Mode.HANGAR) drawHangar() else drawWorldMeshes()
         glDisable(GL_DEPTH_TEST)
+        spritePass { if (mode == Mode.HANGAR) hangarSprites() else worldSprites() }
+        glDepthMask(true)
+    }
+
+    private inline fun spritePass(draw: () -> Unit) {
         glDepthMask(false)
         glEnable(GL_BLEND)
         glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA)
         sprite.use()
         sprite.m4("uVp", vp)
         batch.begin()
-        if (mode == Mode.HANGAR) hangarSprites() else worldSprites()
+        draw()
         batch.flush(sprite)
         glDisable(GL_BLEND)
-        glDepthMask(true)
     }
 
     // ---------------------------------------------------------------- sky
@@ -350,15 +356,32 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
 
     // ---------------------------------------------------------------- sprites
 
+    /** A soft glow pad under the hangar's ship, with a slow pulse. */
+    private fun hangarPad() {
+        val g = swatch(preview.paint.glow).argb.toInt()
+        val x = -world.W * 0.36f
+        batch.dot(x, -1.4f, 5.5f, g, 0.55f, Shape.SOFT)
+        batch.quad(x, -1.4f, 5.2f, 1.6f, 1f, 0f, 0xFFFFFFFF.toInt(), 0.6f, Shape.WAVE)
+        val a = (0.5f + 0.5f * sin(time * 2f))
+        batch.quad(x, -1.4f, 4.4f * (0.9f + 0.1f * a), 1.3f, 1f, 0f, g, 0.7f, Shape.RING)
+    }
+
+    /** The engines' glow and the hitbox ring, drawn before the ship so it sits on top of them. */
+    private fun shipUnderglow() {
+        val wd = world
+        if (!wd.alive || wd.state == World.State.IDLE) return
+        val noz = ShipMeshes.nozzles(wd.loadout.engine)
+        for (o in noz) {
+            val fl = 0.85f + 0.15f * sin(time * 50f + o * 9f)
+            batch.dot(wd.px - 1.12f, wd.py + o * cos(wd.bank), 0.42f * fl, wd.glow, 1f, Shape.ORB)
+        }
+        if (mode == Mode.PLAY && showHitbox) batch.dot(wd.px, wd.py, wd.ship.hitbox * 4.2f, wd.glow, 0.45f, Shape.RING)
+    }
+
     private fun hangarSprites() {
         val l = preview
         val g = swatch(l.paint.glow).argb.toInt()
         val x = -world.W * 0.36f
-        // A soft glow pad under the ship and a pulse from the engines.
-        batch.dot(x, -1.4f, 5.5f, g, 1f, Shape.SOFT)
-        batch.quad(x, -1.4f, 5.2f, 1.6f, 1f, 0f, 0xFFFFFFFF.toInt(), 1f, Shape.WAVE)
-        val a = (0.5f + 0.5f * sin(time * 2f))
-        batch.quad(x, -1.4f, 4.4f * (0.9f + 0.1f * a), 1.3f, 1f, 0f, g, 1f, Shape.RING)
         if (l.support == Support.ORBITALS) {
             for (k in 0 until 3) {
                 val an = time * 1.6f + k * 2.094f
@@ -402,15 +425,6 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
                 }
             }
             batch.dot(p.x[i], p.y[i], p.size[i], p.color[i], if (sh == Shape.WAVE || sh == Shape.RING) f else min(1f, f * 1.6f), sh)
-        }
-
-        // Thrusters' glow behind the ship.
-        if (wd.alive && wd.state != World.State.IDLE) {
-            val noz = ShipMeshes.nozzles(wd.loadout.engine)
-            for (o in noz) {
-                val fl = 0.85f + 0.15f * sin(time * 50f + o * 9f)
-                batch.dot(wd.px - 1.12f, wd.py + o * cos(wd.bank), 0.42f * fl, glow, 1f, Shape.ORB)
-            }
         }
 
         // The player's shots.
@@ -528,12 +542,8 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
             }
         }
 
-        // The hitbox: the one dot that matters.
-        if (mode == Mode.PLAY && showHitbox && wd.alive) {
-            val hb = wd.ship.hitbox
-            batch.dot(wd.px, wd.py, hb * 2.4f, 0xFFFFFFFF.toInt(), 1f, Shape.BULLET)
-            batch.dot(wd.px, wd.py, hb * 4.2f, glow, 1f, Shape.RING)
-        }
+        // The hitbox: the one dot that matters (its ring is under the ship).
+        if (mode == Mode.PLAY && showHitbox && wd.alive) batch.dot(wd.px, wd.py, wd.ship.hitbox * 1.8f, 0xFFFFFFFF.toInt(), 1f, Shape.BULLET)
 
         // Full-screen flash and the phase shift's tint.
         if (mode == Mode.PLAY) {
