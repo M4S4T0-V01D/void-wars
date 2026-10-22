@@ -39,6 +39,7 @@ class WorldTest {
         val base = l.stats { 5 }
         val stats = if (tough) base.copy(maxHp = 1_000_000, damage = 6f) else base
         w.start(l, stats, stage)
+        w.trigger = true
         var t = 0f
         while (t < seconds && log.events.none { it is WorldEvent.Finished }) {
             w.frame(1f / 60f)
@@ -84,6 +85,35 @@ class WorldTest {
         assertTrue(died!!.canRevive)
         val fin = log.events.filterIsInstance<WorldEvent.Finished>().single()
         assertTrue(!fin.result.cleared)
+    }
+
+    @Test
+    fun gunsFireOnlyWithTheTriggerHeld() {
+        val w = World(Quiet)
+        w.W = 16f
+        val l = Loadout()
+        w.start(l, l.stats { 1 }, Stage(0, 0))
+        repeat(180) { w.frame(1f / 60f) }
+        assertEquals(0, w.shots.n)
+        w.trigger = true
+        repeat(30) { w.frame(1f / 60f) }
+        assertTrue(w.shots.n > 0)
+    }
+
+    @Test
+    fun theBackupGunSwapsIn() {
+        val w = World(Quiet)
+        w.W = 16f
+        val l = Loadout(backup = Primary.RAIL)
+        w.start(l, l.stats { 1 }, Stage(0, 0))
+        assertEquals(Primary.PULSE, w.gun)
+        assertEquals(Primary.RAIL, w.swapTo)
+        w.swap()
+        assertEquals(Primary.RAIL, w.gun)
+        w.swap()
+        assertEquals(Primary.PULSE, w.gun)
+        // Fitting the backup as the main gun trades them over.
+        assertEquals(Loadout(primary = Primary.RAIL, backup = Primary.PULSE), l.with(Primary.RAIL))
     }
 
     @Test

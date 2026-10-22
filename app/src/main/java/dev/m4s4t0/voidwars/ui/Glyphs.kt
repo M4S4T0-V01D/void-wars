@@ -134,6 +134,7 @@ fun DrawScope.glyph(name: String, color: Color, glow: Boolean = true) {
             "sound" -> { line(4f, 9f, 8f, 9f, 13f, 4f, 13f, 20f, 8f, 15f, 4f, 15f, close = true); arc(14f, 12f, 4f, -50f, 100f); arc(14f, 12f, 7.5f, -50f, 100f) }
             "warning" -> { line(12f, 3f, 22f, 20f, 2f, 20f, close = true); line(12f, 9f, 12f, 14f); circle(12f, 17f, 1.2f, true) }
             "retry" -> { arc(12f, 12f, 7.5f, -60f, 300f); line(17f, 2.5f, 16f, 6.5f, 20f, 7.5f) }
+            "swap" -> { line(4f, 8f, 19f, 8f); line(15f, 4f, 19f, 8f, 15f, 12f); line(20f, 16f, 5f, 16f); line(9f, 12f, 5f, 16f, 9f, 20f) }
             "next" -> { line(5f, 5f, 12f, 12f, 5f, 19f); line(12f, 5f, 19f, 12f, 12f, 19f) }
             "shield" -> line(12f, 2.5f, 20f, 6f, 19f, 13f, 12f, 21.5f, 5f, 13f, 4f, 6f, close = true)
             "speed" -> { arc(12f, 14f, 9f, 180f, 180f); line(12f, 14f, 17f, 8f); circle(12f, 14f, 1.4f, true) }

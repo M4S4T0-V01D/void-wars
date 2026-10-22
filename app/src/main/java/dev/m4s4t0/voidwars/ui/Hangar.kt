@@ -48,6 +48,7 @@ import dev.m4s4t0.voidwars.model.MAX_UPGRADE
 import dev.m4s4t0.voidwars.model.Paint
 import dev.m4s4t0.voidwars.model.Part
 import dev.m4s4t0.voidwars.model.Price
+import dev.m4s4t0.voidwars.model.Primary
 import dev.m4s4t0.voidwars.model.SWATCHES
 import dev.m4s4t0.voidwars.model.ShipStats
 import dev.m4s4t0.voidwars.model.Slot
@@ -146,7 +147,8 @@ private fun PartGrid(slot: Slot, picked: Part?, fitted: Loadout, onPick: (Part) 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     when {
                         equipped -> Text("Fitted", color = Void.ok, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        owned -> Text("Owned", color = Void.dim, fontSize = 12.sp)
+                        fitted.backup == p -> Text("Backup", color = Void.cyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        owned ->Text("Owned", color = Void.dim, fontSize = 12.sp)
                         else -> PriceTag(p.price)
                     }
                     if (owned && slot.upgradable && upgradeCost(p, 1) != null) {
@@ -183,6 +185,13 @@ private fun PartActions(p: Part, onFitted: () -> Unit) {
                 Text("Mk $lvl", color = Void.cyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Pips(lvl, 7.dp)
             } else Text(p.desc, color = Void.dim, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        // A second gun to swap to in flight.
+        if (p is Primary && owned && !equipped) {
+            val isBackup = Game.loadout.backup == p
+            ActionButton(if (isBackup) "Unfit backup" else "Fit as backup", icon = "swap", primary = false) {
+                Game.setBackup(if (isBackup) null else p); Audio.play(Snd.POWER, 0.6f)
+            }
         }
         when {
             !owned -> BuyButton(p.price) {

@@ -355,14 +355,14 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
         val g = swatch(l.paint.glow).argb.toInt()
         val x = -world.W * 0.36f
         // A soft glow pad under the ship and a pulse from the engines.
-        batch.dot(x, -1.4f, 5.5f, g, 0f, Shape.SOFT)
-        batch.quad(x, -1.4f, 5.2f, 1.6f, 1f, 0f, 0xFFFFFFFF.toInt(), 0f, Shape.WAVE)
+        batch.dot(x, -1.4f, 5.5f, g, 1f, Shape.SOFT)
+        batch.quad(x, -1.4f, 5.2f, 1.6f, 1f, 0f, 0xFFFFFFFF.toInt(), 1f, Shape.WAVE)
         val a = (0.5f + 0.5f * sin(time * 2f))
-        batch.quad(x, -1.4f, 4.4f * (0.9f + 0.1f * a), 1.3f, 1f, 0f, g, 0f, Shape.RING)
+        batch.quad(x, -1.4f, 4.4f * (0.9f + 0.1f * a), 1.3f, 1f, 0f, g, 1f, Shape.RING)
         if (l.support == Support.ORBITALS) {
             for (k in 0 until 3) {
                 val an = time * 1.6f + k * 2.094f
-                batch.dot(x + cos(an) * 5.5f, 0.4f + sin(an) * 2.2f, 0.55f, g, 0f, Shape.ORB)
+                batch.dot(x + cos(an) * 5.5f, 0.4f + sin(an) * 2.2f, 0.55f, g, 1f, Shape.ORB)
             }
         }
     }
@@ -376,9 +376,16 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
             val bob = 1f + 0.12f * sin(pk.age[i] * 8f + i)
             when (pk.kind[i]) {
                 PKind.CREDIT -> { batch.dot(pk.x[i], pk.y[i], 0.34f * bob, 0xFFFFC23D.toInt(), 1f, Shape.HEX) }
-                PKind.GEM -> { batch.dot(pk.x[i], pk.y[i], 0.75f, 0xFFB070FF.toInt(), 0f, Shape.SOFT); batch.dot(pk.x[i], pk.y[i], 0.42f * bob, 0xFFC890FF.toInt(), 1f, Shape.DIAMOND) }
-                PKind.REPAIR -> { batch.dot(pk.x[i], pk.y[i], 0.6f * bob, 0xFF5AFF8A.toInt(), 0f, Shape.ORB); batch.dot(pk.x[i], pk.y[i], 0.7f, 0xFF5AFF8A.toInt(), 0f, Shape.RING) }
-                else -> batch.dot(pk.x[i], pk.y[i], 0.6f * bob, 0xFF7CE0FF.toInt(), 0f, Shape.STAR)
+                PKind.GEM -> { batch.dot(pk.x[i], pk.y[i], 0.75f, 0xFFB070FF.toInt(), 1f, Shape.SOFT); batch.dot(pk.x[i], pk.y[i], 0.42f * bob, 0xFFC890FF.toInt(), 1f, Shape.DIAMOND) }
+                PKind.WEAPON -> {
+                    val c = World.CRATE_COLOR
+                    batch.dot(pk.x[i], pk.y[i], 1.1f, c, 0.8f, Shape.SOFT)
+                    batch.dot(pk.x[i], pk.y[i], 0.85f * bob, c, 1f, Shape.RING)
+                    batch.quad(pk.x[i], pk.y[i], 0.5f * bob, 0.5f * bob, cos(pk.age[i] * 2f), sin(pk.age[i] * 2f), c, 1f, Shape.DIAMOND)
+                    batch.dot(pk.x[i], pk.y[i], 0.22f, 0xFFFFFFFF.toInt(), 1f, Shape.ORB)
+                }
+                PKind.REPAIR -> { batch.dot(pk.x[i], pk.y[i], 0.6f * bob, 0xFF5AFF8A.toInt(), 1f, Shape.ORB); batch.dot(pk.x[i], pk.y[i], 0.7f, 0xFF5AFF8A.toInt(), 1f, Shape.RING) }
+                else -> batch.dot(pk.x[i], pk.y[i], 0.6f * bob, 0xFF7CE0FF.toInt(), 1f, Shape.STAR)
             }
         }
 
@@ -402,7 +409,7 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
             val noz = ShipMeshes.nozzles(wd.loadout.engine)
             for (o in noz) {
                 val fl = 0.85f + 0.15f * sin(time * 50f + o * 9f)
-                batch.dot(wd.px - 1.12f, wd.py + o * cos(wd.bank), 0.42f * fl, glow, 0f, Shape.ORB)
+                batch.dot(wd.px - 1.12f, wd.py + o * cos(wd.bank), 0.42f * fl, glow, 1f, Shape.ORB)
             }
         }
 
@@ -412,21 +419,21 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
             val sp = hypot(s.vx[i], s.vy[i]).coerceAtLeast(0.01f)
             val dx = s.vx[i] / sp; val dy = s.vy[i] / sp
             when (s.kind[i]) {
-                SKind.BOLT -> batch.quad(s.x[i], s.y[i], 0.55f, s.r[i] * 1.6f, dx, dy, glow, 0f, Shape.BEAM)
-                SKind.DRONE -> batch.quad(s.x[i], s.y[i], 0.4f, s.r[i] * 1.5f, dx, dy, wd.trim, 0f, Shape.BEAM)
-                SKind.PELLET -> batch.dot(s.x[i], s.y[i], s.r[i] * 2.4f, glow, 0f, Shape.ORB)
+                SKind.BOLT -> batch.quad(s.x[i], s.y[i], 0.55f, s.r[i] * 1.6f, dx, dy, glow, 1f, Shape.BEAM)
+                SKind.DRONE -> batch.quad(s.x[i], s.y[i], 0.4f, s.r[i] * 1.5f, dx, dy, wd.trim, 1f, Shape.BEAM)
+                SKind.PELLET -> batch.dot(s.x[i], s.y[i], s.r[i] * 2.4f, glow, 1f, Shape.ORB)
                 SKind.MISSILE -> {
-                    batch.quad(s.x[i] - dx * 0.25f, s.y[i] - dy * 0.25f, 0.5f, 0.22f, dx, dy, 0xFFFF9A40.toInt(), 0f, Shape.BEAM)
+                    batch.quad(s.x[i] - dx * 0.25f, s.y[i] - dy * 0.25f, 0.5f, 0.22f, dx, dy, 0xFFFF9A40.toInt(), 1f, Shape.BEAM)
                     batch.quad(s.x[i], s.y[i], 0.3f, 0.16f, dx, dy, 0xFFFFFFFF.toInt(), 1f, Shape.DIAMOND)
                 }
                 SKind.PLASMA -> {
-                    batch.dot(s.x[i], s.y[i], s.r[i] * 2.2f, wd.trim, 0f, Shape.SOFT)
-                    batch.dot(s.x[i], s.y[i], s.r[i] * 1.4f, glow, 0f, Shape.ORB)
-                    batch.dot(s.x[i], s.y[i], s.r[i] * 1.6f, wd.trim, 0f, Shape.RING)
+                    batch.dot(s.x[i], s.y[i], s.r[i] * 2.2f, wd.trim, 1f, Shape.SOFT)
+                    batch.dot(s.x[i], s.y[i], s.r[i] * 1.4f, glow, 1f, Shape.ORB)
+                    batch.dot(s.x[i], s.y[i], s.r[i] * 1.6f, wd.trim, 1f, Shape.RING)
                 }
-                SKind.RAIL -> batch.quad(s.x[i] - dx * 1.2f, s.y[i] - dy * 1.2f, 1.9f, s.r[i] * 1.8f, dx, dy, glow, 0f, Shape.BEAM)
-                SKind.FLAK -> { batch.dot(s.x[i], s.y[i], s.r[i] * 2.4f, 0xFFFFA040.toInt(), 0f, Shape.ORB) }
-                else -> batch.quad(s.x[i], s.y[i], 0.28f, 0.1f, dx, dy, 0xFFFFC070.toInt(), 0f, Shape.SPARK)
+                SKind.RAIL -> batch.quad(s.x[i] - dx * 1.2f, s.y[i] - dy * 1.2f, 1.9f, s.r[i] * 1.8f, dx, dy, glow, 1f, Shape.BEAM)
+                SKind.FLAK -> { batch.dot(s.x[i], s.y[i], s.r[i] * 2.4f, 0xFFFFA040.toInt(), 1f, Shape.ORB) }
+                else -> batch.quad(s.x[i], s.y[i], 0.28f, 0.1f, dx, dy, 0xFFFFC070.toInt(), 1f, Shape.SPARK)
             }
         }
 
@@ -436,9 +443,9 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
             val len = wd.W + 2f - x0
             val lw = wd.wpn.laserW
             val fl = 1f + 0.12f * sin(time * 60f)
-            batch.quad(x0 + len / 2, wd.py, len / 2 + 0.3f, lw * 2.4f * fl, 1f, 0f, glow, 0f, Shape.BEAM)
-            batch.quad(x0 + len / 2, wd.py, len / 2 + 0.3f, lw * 1.1f, 1f, 0f, 0xFFFFFFFF.toInt(), 0f, Shape.BEAM)
-            batch.dot(x0, wd.py, lw * 3f * fl, glow, 0f, Shape.ORB)
+            batch.quad(x0 + len / 2, wd.py, len / 2 + 0.3f, lw * 2.4f * fl, 1f, 0f, glow, 1f, Shape.BEAM)
+            batch.quad(x0 + len / 2, wd.py, len / 2 + 0.3f, lw * 1.1f, 1f, 0f, 0xFFFFFFFF.toInt(), 1f, Shape.BEAM)
+            batch.dot(x0, wd.py, lw * 3f * fl, glow, 1f, Shape.ORB)
         }
 
         // Orbitals and the singularity.
@@ -446,13 +453,13 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
         for (k in 0 until orbs) {
             val a = wd.wpn.orbA + k * 2f * PI.toFloat() / orbs
             val ox = wd.px + cos(a) * wd.wpn.orbR; val oy = wd.py + sin(a) * wd.wpn.orbR
-            batch.dot(ox, oy, 0.75f, glow, 0f, Shape.SOFT)
-            batch.dot(ox, oy, 0.38f, wd.trim, 0f, Shape.ORB)
+            batch.dot(ox, oy, 0.75f, glow, 1f, Shape.SOFT)
+            batch.dot(ox, oy, 0.38f, wd.trim, 1f, Shape.ORB)
         }
         if (wd.wpn.singT > 0f) {
             val x = wd.wpn.singX; val y = wd.wpn.singY
             val grow = min(1f, (5f - wd.wpn.singT) * 4f).coerceAtLeast(0.2f) * min(1f, wd.wpn.singT * 3f)
-            batch.dot(x, y, 4.2f * grow, 0xFF7B2CFF.toInt(), 0f, Shape.SOFT)
+            batch.dot(x, y, 4.2f * grow, 0xFF7B2CFF.toInt(), 1f, Shape.SOFT)
             batch.dot(x, y, 2.4f * grow, wd.trim, 1f, Shape.HOLE)
             for (k in 0 until 3) {
                 val r = ((time * 0.8f + k / 3f) % 1f)
@@ -494,7 +501,7 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
                 val fl = 1f + 0.08f * sin(time * 70f)
                 batch.quad(bm.x + c * len / 2, bm.y + sn * len / 2, len / 2, bm.width * 1.3f * fl * end, c, sn, col, 1f, Shape.BEAM)
                 batch.quad(bm.x + c * len / 2, bm.y + sn * len / 2, len / 2, bm.width * 0.55f * end, c, sn, 0xFFFFFFFF.toInt(), 1f, Shape.BEAM)
-                batch.dot(bm.x, bm.y, bm.width * 2.2f, col, 0f, Shape.ORB)
+                batch.dot(bm.x, bm.y, bm.width * 2.2f, col, 1f, Shape.ORB)
             }
         }
 
@@ -511,10 +518,10 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
                 BShape.DIAMOND -> {
                     val sp = hypot(b.vx[i], b.vy[i]).coerceAtLeast(0.01f)
                     batch.quad(b.x[i], b.y[i], r * 2.2f, r * 1.5f, b.vx[i] / sp, b.vy[i] / sp, col, 1f, Shape.DIAMOND)
-                    batch.dot(b.x[i], b.y[i], r * 0.8f, 0xFFFFFFFF.toInt(), 0f, Shape.ORB)
+                    batch.dot(b.x[i], b.y[i], r * 0.8f, 0xFFFFFFFF.toInt(), 1f, Shape.ORB)
                 }
                 BShape.RING -> {
-                    batch.dot(b.x[i], b.y[i], r * 1.9f, col, 0f, Shape.RING)
+                    batch.dot(b.x[i], b.y[i], r * 1.9f, col, 1f, Shape.RING)
                     batch.dot(b.x[i], b.y[i], r * 1.3f, col, 1f, Shape.BULLET)
                 }
                 else -> batch.dot(b.x[i], b.y[i], r * 1.7f, col, 1f, Shape.BULLET)
@@ -525,7 +532,7 @@ class GameRenderer(private val quality: Quality, listener: WorldListener) : GLSu
         if (mode == Mode.PLAY && showHitbox && wd.alive) {
             val hb = wd.ship.hitbox
             batch.dot(wd.px, wd.py, hb * 2.4f, 0xFFFFFFFF.toInt(), 1f, Shape.BULLET)
-            batch.dot(wd.px, wd.py, hb * 4.2f, glow, 0f, Shape.RING)
+            batch.dot(wd.px, wd.py, hb * 4.2f, glow, 1f, Shape.RING)
         }
 
         // Full-screen flash and the phase shift's tint.

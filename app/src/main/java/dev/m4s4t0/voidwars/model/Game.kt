@@ -234,6 +234,13 @@ object Game {
         saveAll()
     }
 
+    /** Fits [p] as the backup gun, or takes the backup off (null). */
+    fun setBackup(p: Primary?) {
+        if (p != null && (!owns(p) || p == loadout.primary)) return
+        loadout = loadout.copy(backup = p)
+        saveAll()
+    }
+
     fun paint(p: Paint) {
         loadout = loadout.copy(paint = p)
         saveAll()
@@ -403,17 +410,20 @@ object Game {
         .put("primary", l.primary.name).put("support", l.support.name).put("special", l.special.name)
         .put("c1", l.paint.primary).put("c2", l.paint.secondary).put("c3", l.paint.glow)
         .put("finish", l.paint.finish.name).put("decal", l.paint.decal.name)
+        .put("backup", l.backup?.name ?: "")
 
     fun loadoutFrom(j: JSONObject): Loadout {
         fun <T : Enum<T>> e(values: List<T>, key: String, def: T) = values.firstOrNull { it.name == j.optString(key) } ?: def
         val d = Loadout()
+        val primary = e(Primary.entries, "primary", d.primary)
         return Loadout(
             e(Hull.entries, "hull", d.hull), e(Wings.entries, "wings", d.wings), e(Engine.entries, "engine", d.engine),
-            e(Primary.entries, "primary", d.primary), e(Support.entries, "support", d.support), e(Special.entries, "special", d.special),
+            primary, e(Support.entries, "support", d.support), e(Special.entries, "special", d.special),
             Paint(
                 j.optString("c1", d.paint.primary), j.optString("c2", d.paint.secondary), j.optString("c3", d.paint.glow),
                 e(Finish.entries, "finish", d.paint.finish), e(Decal.entries, "decal", d.paint.decal),
             ),
+            Primary.entries.firstOrNull { it.name == j.optString("backup") && it != primary },
         )
     }
 }

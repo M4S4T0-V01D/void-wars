@@ -75,7 +75,7 @@ enum class Engine(
     override val slot get() = Slot.ENGINE
 }
 
-/** The main gun. Fires by itself; its upgrade level adds streams, damage and size (see the engine's Weapons). */
+/** A gun: fitted as the main one or the backup, or found in a weapon crate. Its upgrade level adds streams, damage and size (see the engine's Weapons). */
 enum class Primary(override val title: String, override val desc: String, override val price: Price) : Part {
     PULSE("Pulse blaster", "Fast twin bolts; more streams as it levels", FREE),
     SPREAD("Scatter cannon", "A wide fan of shots", cr(900, 2)),
@@ -185,6 +185,8 @@ data class Loadout(
     val support: Support = Support.NONE,
     val special: Special = Special.NOVA,
     val paint: Paint = Paint(),
+    /** A second gun to swap to in flight (null: none fitted). Never the same as [primary]. */
+    val backup: Primary? = null,
 ) {
     fun part(slot: Slot): Part = when (slot) {
         Slot.HULL -> hull
@@ -199,7 +201,7 @@ data class Loadout(
         is Hull -> copy(hull = p)
         is Wings -> copy(wings = p)
         is Engine -> copy(engine = p)
-        is Primary -> copy(primary = p)
+        is Primary -> copy(primary = p, backup = if (backup == p) primary else backup)
         is Support -> copy(support = p)
         is Special -> copy(special = p)
     }
@@ -219,6 +221,7 @@ data class Loadout(
             regen = engine.regen,
             iframes = 1.4f + engine.iframes,
             primaryLevel = up(primary),
+            backupLevel = backup?.let(up) ?: 1,
             supportLevel = up(support),
             specialLevel = up(special),
         )
@@ -252,6 +255,7 @@ data class ShipStats(
     val regen: Float,
     val iframes: Float,
     val primaryLevel: Int,
+    val backupLevel: Int,
     val supportLevel: Int,
     val specialLevel: Int,
 )

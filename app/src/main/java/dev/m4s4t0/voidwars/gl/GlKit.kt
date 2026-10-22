@@ -92,8 +92,8 @@ class LitMesh(data: FloatArray) {
 
 /**
  * Every glowing thing in one draw call: quads of (x, y, u, v, rgba, shape), written into an int array (floats by
- * their bits) and streamed to the GPU each frame. Blended premultiplied, so a sprite can glow (alpha 0, added) or
- * cover (alpha 1) in the same batch.
+ * their bits) and streamed to the GPU each frame. Blended premultiplied, so a shape can glow (added) or cover in the
+ * same batch. The alpha passed in is opacity: 0 draws nothing.
  */
 class Batch(val maxQuads: Int) {
     private val data = IntArray(maxQuads * 4 * 6)

@@ -11,7 +11,10 @@ and every icon is a neon line drawing.
 
 ## Fly
 - **Steering:** drag anywhere and the ship moves with your finger, so your thumb never covers it.
-- **Guns:** they fire by themselves.
+- **Guns:** hold the fire button (bottom right) with your other thumb.
+- **Backup gun:** fit a second weapon in the hangar and swap to it in flight.
+- **Weapon crates:** gunships, carriers, bosses and the odd big rock drop orange crates. A crate hands you a
+  different gun, at Mk 3 or better, for 15 seconds.
 - **Hitbox:** only the tiny glowing core can be hit. Show or hide it in Settings.
 - **Grazing:** bullets that brush past you count as grazes. Grazes and kills charge your **special**.
 - **Chains:** kills build a chain that multiplies your score. Taking a hit breaks it.
@@ -47,7 +50,7 @@ Six slots, each with parts to buy, fit and upgrade (up to Mk 5):
 - **Hull** (8): Dart, Wasp, Manta, Talon, Bulwark, Phantom, Halo, Wraith. Hulls trade armour, speed and hitbox size.
 - **Wings** (7): bonuses to damage, speed, graze range, fire rate, magnet or special charge.
 - **Engine** (4): Ion, Afterburner, Fusion (self-repair) and Quantum (longer invulnerability).
-- **Weapon** (7): Pulse, Scatter, Lance beam, Seekers, Plasma, Rail and Flak. Upgrades add streams, damage and size.
+- **Weapon** (7): Pulse, Scatter, Lance beam, Seekers, Plasma, Rail and Flak. Upgrades add streams, damage and size. Any weapon you own can be fitted as the backup.
 - **Support** (5): wing drones, a missile pod, orbital shields or a Tesla coil.
 - **Special** (5):
   - Nova bomb

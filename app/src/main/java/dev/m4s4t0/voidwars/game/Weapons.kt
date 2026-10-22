@@ -43,17 +43,16 @@ internal class Weapons(private val w: World) {
     private val rate get() = w.ship.fireRate * if (invulnerable) 2.6f else 1f
 
     fun update(h: Float) {
-        val s = w.ship
-        val L = s.primaryLevel
+        val L = w.gunLevel
         val x = w.px + 0.85f
         val y = w.py
-        // Hold fire while flying in.
-        val firing = w.px > -w.W + 0.3f && (w.state == World.State.PLAYING)
-        laserOn = firing && w.loadout.primary == Primary.LASER
+        // Only with the trigger held (the demo ship fires by itself), and not while flying in.
+        val firing = (w.trigger || w.demo) && w.px > -w.W + 0.3f && w.state == World.State.PLAYING
+        laserOn = firing && w.gun == Primary.LASER
         laserW = 0.28f + 0.07f * L
-        fireT -= h * rate
+        fireT = maxOf(fireT - h * rate, if (firing) -1f else 0f)
         if (firing && fireT <= 0f) {
-            when (w.loadout.primary) {
+            when (w.gun) {
                 Primary.PULSE -> {
                     fireT += 0.085f
                     val d = 3.6f * dmg * (1f + 0.06f * (L - 1))
@@ -309,7 +308,7 @@ internal class Weapons(private val w: World) {
     }
 
     private fun shrapnel(x: Float, y: Float) {
-        val n = 8 + 2 * w.ship.primaryLevel
+        val n = 8 + 2 * w.gunLevel
         for (k in 0 until n) {
             val a = -0.9f + 1.8f * k / (n - 1) + (w.random() - 0.5f) * 0.1f
             val sp = 18f + w.random() * 6f
@@ -377,7 +376,7 @@ internal class Weapons(private val w: World) {
     }
 
     private fun laser(h: Float) {
-        val L = w.ship.primaryLevel
+        val L = w.gunLevel
         val dps = (36f + 11f * L) * dmg * rate
         val x0 = w.px + 0.8f
         for (k in 0 until w.ne) {

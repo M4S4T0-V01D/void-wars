@@ -26,9 +26,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.input.pointer.pointerInput
+import dev.m4s4t0.voidwars.game.Hud
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -102,8 +108,15 @@ fun PlayScreen(state: AppState) {
                         }
                         RoundIcon("pause", size = 42.dp) { state.pause(true) }
                     }
-                    SpecialButton(h.charge, h.specialOn, Modifier.align(Alignment.BottomEnd)) {
-                        if (h.charge >= 1f && h.specialOn <= 0f) state.view.gl { world.special() }
+                    // Guns, the special and the trigger, under the right thumb.
+                    Column(Modifier.align(Alignment.BottomEnd), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GunPanel(h) { state.view.gl { world.swap() } }
+                        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            SpecialButton(h.charge, h.specialOn, Modifier) {
+                                if (h.charge >= 1f && h.specialOn <= 0f) state.view.gl { world.special() }
+                            }
+                            FireButton(state, h.crate > 0f)
+                        }
                     }
                 }
                 CalloutText(run.callout, Modifier.align(Alignment.Center))
@@ -153,6 +166,68 @@ private fun SpecialButton(charge: Float, on: Float, modifier: Modifier, onFire: 
         Text(if (ready) "$name!" else name, color = if (ready) Void.cyan else Void.dim, fontSize = 11.sp, fontWeight = FontWeight.Bold, style = hudStyle())
     }
 }
+
+/** Hold to fire. Takes its own finger, so the other one keeps steering. */
+@Composable
+private fun FireButton(state: AppState, crate: Boolean) {
+    var held by remember { mutableStateOf(false) }
+    val accent = if (crate) CRATE else Void.cyan
+    fun trigger(on: Boolean) {
+        if (held == on) return
+        held = on
+        state.view.gl { world.trigger = on }
+        if (on) Haptics.buzz(Haptics.Kind.CLICK, 0.3f)
+    }
+    DisposableEffect(Unit) { onDispose { state.view.gl { world.trigger = false } } }
+    Box(
+        Modifier.size(104.dp).scale(if (held) 0.93f else 1f).pointerInput(Unit) {
+            awaitEachGesture {
+                try {
+                    awaitFirstDown(requireUnconsumed = false).consume()
+                    trigger(true)
+                    while (true) {
+                        val e = awaitPointerEvent()
+                        e.changes.forEach { it.consume() }
+                        if (e.changes.none { it.pressed }) break
+                    }
+                } finally {
+                    trigger(false)
+                }
+            }
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val r = size.minDimension / 2
+            drawCircle(Color.Black.copy(alpha = 0.45f), r - 2.dp.toPx())
+            if (held) drawCircle(accent.copy(alpha = 0.28f), r - 2.dp.toPx())
+            drawCircle(accent.copy(alpha = if (held) 0.95f else 0.5f), r - 3.dp.toPx(), style = Stroke(4.dp.toPx()))
+        }
+        Glyph("crosshair", 44.dp, color = if (held) Color.White else accent, glow = held)
+    }
+}
+
+/** The gun firing now, a crate gun's time left, and the swap to the backup. */
+@Composable
+private fun GunPanel(h: Hud, onSwap: () -> Unit) {
+    val crate = h.crate > 0f
+    val accent = if (crate) CRATE else Void.cyan
+    Row(
+        Modifier.glass(RoundedCornerShape(50), if (crate) CRATE.copy(alpha = 0.7f) else Void.border, 0.6f).padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Glyph("weapon", 16.dp, color = accent)
+        Column(Modifier.widthIn(min = 90.dp)) {
+            Text(h.gun.title, color = Void.text, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            if (crate) Bar(h.crate, Modifier.width(90.dp).padding(top = 2.dp), 3.dp, color = CRATE)
+            else if (h.swapTo != null) Text("swap: ${h.swapTo.title}", color = Void.dim, fontSize = 10.sp, maxLines = 1)
+        }
+        if (h.swapTo != null) RoundIcon("swap", size = 36.dp, tint = accent) { onSwap() }
+        else Spacer(Modifier.width(4.dp))
+    }
+}
+
+private val CRATE = Color(0xFFFF7A1F)
 
 @Composable
 private fun CalloutText(c: Callout?, modifier: Modifier) {

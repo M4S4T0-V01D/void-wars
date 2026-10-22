@@ -8,6 +8,7 @@ import dev.m4s4t0.voidwars.model.Campaign
 import dev.m4s4t0.voidwars.model.Engine
 import dev.m4s4t0.voidwars.model.Foe
 import dev.m4s4t0.voidwars.model.Loadout
+import dev.m4s4t0.voidwars.model.Primary
 import dev.m4s4t0.voidwars.model.RunResult
 import dev.m4s4t0.voidwars.model.ShipStats
 import dev.m4s4t0.voidwars.model.Special
@@ -50,6 +51,10 @@ data class Hud(
     val boss: Boss?,
     val seconds: Float,
     val grazes: Int,
+    /** The gun firing now, the fitted one a swap would bring up (null: none), and a crate gun's time left (0..1). */
+    val gun: Primary,
+    val swapTo: Primary?,
+    val crate: Float,
 )
 
 sealed interface WorldEvent {
@@ -82,6 +87,9 @@ class World(val sfx: Sfx = DeviceSfx) {
         const val RED = 3
         const val VIOLET = 4
         const val ICE = 5
+        /** How long a weapon crate's gun lasts. */
+        const val CRATE_SECONDS = 15f
+        val CRATE_COLOR = 0xFFFF7A1F.toInt()
     }
 
     enum class State { IDLE, PLAYING, CLEAR, DOWN, OVER }
@@ -144,6 +152,16 @@ class World(val sfx: Sfx = DeviceSfx) {
     var timeScale = 1f
     var revived = false
     private var specialReady = false
+    /** The fire button is held. (The menu's demo ship fires by itself.) */
+    var trigger = false
+    /** The gun firing now and its level: the main gun, the backup, or a crate's. */
+    var gun = Primary.PULSE
+        private set
+    var gunLevel = 1
+        private set
+    private var onBackup = false
+    private var crateGun: Primary? = null
+    private var crateT = 0f
 
     // Touch dragging (relative: the ship moves by however far the finger does).
     private var dragId = -1
@@ -204,6 +222,8 @@ class World(val sfx: Sfx = DeviceSfx) {
         score = 0; credits = 0; kills = 0; rocks = 0; elites = 0; bossKills = 0; spawned = 0; grazes = 0; pickupsN = 0
         specials = 0; hits = 0; chain = 0; chainT = 0f; bestChain = 0; chains25 = 0
         shake = 0f; freeze = 0f; flash = 0f
+        trigger = false; onBackup = false; crateGun = null; crateT = 0f
+        arm()
         wpn.reset()
         when {
             demo -> { sector = 0; difficulty = 0.5f }
@@ -245,6 +265,62 @@ class World(val sfx: Sfx = DeviceSfx) {
         }
     }
 
+    // ---------------------------------------------------------------- guns
+
+    private fun levelOf(p: Primary) = when (p) {
+        loadout.primary -> ship.primaryLevel
+        loadout.backup -> ship.backupLevel
+        else -> 1
+    }
+
+    private fun arm() {
+        val c = crateGun
+        val b = loadout.backup
+        when {
+            // A crate's gun comes at Mk 3 at least.
+            c != null -> { gun = c; gunLevel = max(3, levelOf(c)) }
+            onBackup && b != null -> { gun = b; gunLevel = ship.backupLevel }
+            else -> { gun = loadout.primary; gunLevel = ship.primaryLevel }
+        }
+    }
+
+    /** The fitted gun a swap brings up, if there is one. */
+    val swapTo: Primary? get() = when {
+        loadout.backup == null -> null
+        crateGun != null -> if (onBackup) loadout.backup else loadout.primary
+        onBackup -> loadout.primary
+        else -> loadout.backup
+    }
+
+    /** Main gun ⇄ backup. With a crate's gun out, puts it away and goes back to the fitted one. */
+    fun swap() {
+        if (!alive || state != State.PLAYING || demo || loadout.backup == null) return
+        if (crateGun != null) { crateGun = null; crateT = 0f } else onBackup = !onBackup
+        arm()
+        sfx.play(Snd.PICKUP, 0.45f, 0.75f, minGapMs = 0)
+        sfx.buzz(Haptics.Kind.TICK, 0.5f)
+        listener?.event(WorldEvent.Callout(gun.title))
+    }
+
+    private fun tickCrate(h: Float) {
+        if (crateT <= 0f) return
+        crateT -= h
+        if (crateT <= 0f) {
+            crateGun = null
+            arm()
+            listener?.event(WorldEvent.Callout("Back to the ${gun.title}"))
+        }
+    }
+
+    /** A crate with a different gun from the one firing now. */
+    private fun dropCrate(x: Float, y: Float) {
+        if (demo) return
+        val all = Primary.entries
+        var p = all[rnd.nextInt(all.size)]
+        if (p == gun) p = all[(p.ordinal + 1 + rnd.nextInt(all.size - 1)) % all.size]
+        drop(x, y, PKind.WEAPON, p.ordinal)
+    }
+
     // ---------------------------------------------------------------- the loop
 
     /** Advances by [dtRaw] seconds of real time. */
@@ -269,7 +345,7 @@ class World(val sfx: Sfx = DeviceSfx) {
             listener?.hud(
                 Hud(
                     hull, score, credits, chain, mult, charge, if (specialMax > 0f) specialT / specialMax else 0f, progress(),
-                    boss?.frac ?: 0f, boss?.boss, t, grazes,
+                    boss?.frac ?: 0f, boss?.boss, t, grazes, gun, swapTo, crateT / CRATE_SECONDS,
                 ),
             )
         }
@@ -296,6 +372,7 @@ class World(val sfx: Sfx = DeviceSfx) {
                 director(wdt)
                 if (alive) {
                     movePlayer(h)
+                    tickCrate(h)
                     wpn.update(h)
                     specials(h)
                 }
@@ -663,6 +740,7 @@ class World(val sfx: Sfx = DeviceSfx) {
             Foe.ROCK_S, Foe.ROCK_M, Foe.ROCK_L -> {
                 rocks++
                 rockBurst(e)
+                if (f == Foe.ROCK_L && e.counted && rnd.nextFloat() < 0.06f) dropCrate(e.x, e.y)
                 sfx.play(Snd.ROCK, 0.5f + e.r * 0.3f, 1.25f - e.r * 0.25f, pan, 30)
                 if (f != Foe.ROCK_S) {
                     val kid = if (f == Foe.ROCK_L) Foe.ROCK_M else Foe.ROCK_S
@@ -688,6 +766,7 @@ class World(val sfx: Sfx = DeviceSfx) {
                 for (k in 0 until 5) explode(e.x + rnd.nextFloat() * 3f - 1.5f, e.y + rnd.nextFloat() * 2f - 1f, 1.2f, 0xFFFFC060.toInt())
                 drop(e.x, e.y, PKind.REPAIR, 1)
                 drop(e.x, e.y, PKind.CHARGE, 1)
+                dropCrate(e.x, e.y)
                 clearBullets(true)
                 shake = max(shake, 1.4f)
                 freeze = 0.1f
@@ -702,7 +781,7 @@ class World(val sfx: Sfx = DeviceSfx) {
                 if (big) shake = max(shake, 0.4f)
                 if (f == Foe.GUNSHIP || f == Foe.SPINNER || f == Foe.LANCER) {
                     val roll = rnd.nextFloat()
-                    if (roll < 0.12f) drop(e.x, e.y, PKind.REPAIR, 1) else if (roll < 0.3f) drop(e.x, e.y, PKind.CHARGE, 1)
+                    if (roll < 0.12f) drop(e.x, e.y, PKind.REPAIR, 1) else if (roll < 0.3f) drop(e.x, e.y, PKind.CHARGE, 1) else if (roll < 0.42f) dropCrate(e.x, e.y)
                 }
             }
         }
@@ -900,6 +979,16 @@ class World(val sfx: Sfx = DeviceSfx) {
                 sfx.play(Snd.PICKUP, 1f, 1.2f, minGapMs = 0)
                 ring(px, py, glow, 0.5f, 6f)
             }
+            PKind.WEAPON -> {
+                pickupsN++
+                crateGun = Primary.entries[value]
+                crateT = CRATE_SECONDS
+                arm()
+                sfx.play(Snd.PICKUP, 1f, 0.9f, minGapMs = 0)
+                sfx.buzz(Haptics.Kind.TICK, 0.8f)
+                ring(px, py, CRATE_COLOR, 0.6f, 8f)
+                listener?.event(WorldEvent.Callout("${gun.title}!", big = true))
+            }
         }
     }
 
@@ -1062,6 +1151,7 @@ class World(val sfx: Sfx = DeviceSfx) {
         var left = value
         while (left > 0) { val v = min(10, left); drop(e.x, e.y, if (v == 10) PKind.GEM else PKind.CREDIT, v); left -= v }
         drop(e.x, e.y, PKind.REPAIR, 1)
+        dropCrate(e.x, e.y)
         sfx.play(Snd.BOSS_BOOM, minGapMs = 0)
         sfx.buzz(Haptics.Kind.BIG_BOOM)
         listener?.event(WorldEvent.BossDown(which))

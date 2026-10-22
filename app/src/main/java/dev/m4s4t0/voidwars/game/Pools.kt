@@ -138,6 +138,8 @@ object PKind {
     const val GEM = 1
     const val REPAIR = 2
     const val CHARGE = 3
+    /** A gun for a while; the value is its Primary ordinal. */
+    const val WEAPON = 4
 }
 
 class Pickups(val cap: Int) {
