@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The VOID base style from void-ui; the battle draws edge to edge behind the bars. -->
+    <style name="Theme.Void.Wars" parent="Theme.Void">
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>
