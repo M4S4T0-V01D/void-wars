@@ -51,14 +51,31 @@ void main() {
     if (m < 0.5) {
         base = uC0;
         float d = 0.0;
-        if (uDecal > 0.5 && uDecal < 1.5) d = step(abs(p.y), 0.09);
-        else if (uDecal < 2.5 && uDecal > 1.5) d = step(fract((p.x + abs(p.y) * 1.3) * 2.2), 0.3) * step(abs(p.y), 0.75);
-        else if (uDecal < 3.5 && uDecal > 2.5) d = step(0.0, p.y);
-        else if (uDecal < 4.5 && uDecal > 3.5) d = mod(floor(p.x * 5.0) + floor(p.y * 5.0), 2.0);
-        else if (uDecal < 5.5 && uDecal > 4.5) d = step(0.55, sin(p.x * 11.0 + sin(p.y * 9.0) * 1.6 + abs(p.y) * 6.0));
-        else if (uDecal > 5.5) {
+        float di = floor(uDecal + 0.5);
+        if (di == 1.0) d = step(abs(p.y), 0.09);
+        else if (di == 2.0) d = step(fract((p.x + abs(p.y) * 1.3) * 2.2), 0.3) * step(abs(p.y), 0.75);
+        else if (di == 3.0) d = step(0.0, p.y);
+        else if (di == 4.0) d = mod(floor(p.x * 5.0) + floor(p.y * 5.0), 2.0);
+        else if (di == 5.0) d = step(0.55, sin(p.x * 11.0 + sin(p.y * 9.0) * 1.6 + abs(p.y) * 6.0));
+        else if (di == 6.0) {
             vec2 g = fract(p * 6.0);
             d = max(step(g.x, 0.08), step(g.y, 0.08)) * step(hash(floor(p * 6.0)), 0.55);
+        } else if (di == 7.0) {
+            // Hex: honeycomb edges.
+            vec2 q = p * 5.0; q.x += mod(floor(q.y), 2.0) * 0.5;
+            vec2 g = abs(fract(q) - 0.5);
+            d = step(0.4, max(g.x * 1.1 + g.y * 0.6, g.y));
+        } else if (di == 8.0) d = step(0.6, sin(p.y * 14.0 + sin(p.x * 6.0) * 2.0));
+        else if (di == 9.0) d = step(length(fract(p * 6.0) - 0.5), 0.22);
+        else if (di == 10.0) d = step(abs(p.y - sign(sin(p.x * 7.0)) * 0.12 * fract(p.x * 2.2)), 0.07);
+        else if (di == 11.0) {
+            vec2 q = p * vec2(7.0, 9.0); q.x += mod(floor(q.y), 2.0) * 0.5;
+            d = step(0.42, length(fract(q) - vec2(0.5, 0.0)));
+        } else if (di == 12.0) d = step(0.0, sin(p.y * 9.0 + p.x * 4.0 + uTime * 2.0) * 0.4 - p.x * 0.9 - 0.2);
+        else if (di == 13.0) d = step(0.9, hash(floor(p * 9.0))) * step(length(fract(p * 9.0) - 0.5), 0.3);
+        else if (di >= 14.0) {
+            vec2 g = fract(p * 4.0) - 0.5;
+            d = step(abs(abs(g.x) + abs(g.y) - 0.3), 0.05) * step(0.4, hash(floor(p * 4.0)));
         }
         base = mix(base, uC1, d);
     } else if (m < 1.5) {
@@ -89,7 +106,7 @@ void main() {
         } else if (f < 4.5) {
             base = mix(base, hue(dot(n, vec3(0.6, 0.3, 0.7)) * 1.4 + uTime * 0.08 + p.x * 0.5), 0.6);
             specAmt = 0.9; shin = 40.0;
-        } else {
+        } else if (f < 5.5) {
             // Void: dark paint with stars drifting underneath.
             base *= 0.25;
             vec2 sp = p * 14.0 + vec2(uTime * 0.6, 0.0);
@@ -97,6 +114,33 @@ void main() {
             float tw = 0.5 + 0.5 * sin(uTime * 3.0 + hash(floor(sp)) * 40.0);
             base += vec3(0.85, 0.8, 1.0) * s * tw * smoothstep(0.4, 0.1, length(fract(sp) - 0.5));
             specAmt = 0.7; shin = 50.0;
+        } else if (f < 6.5) {
+            // Pearl: soft sheen shifting with view angle.
+            base = mix(base, base + hue(dot(n, V) * 0.6 + 0.55) * 0.35, 0.7);
+            specAmt = 0.7; shin = 20.0;
+        } else if (f < 7.5) {
+            // Carbon: woven dark fibre.
+            vec2 w = fract(p * 18.0);
+            float weave = mod(floor(p.x * 18.0) + floor(p.y * 18.0), 2.0) > 0.5 ? w.x : w.y;
+            base = base * 0.35 + vec3(0.08) * weave;
+            specAmt = 0.6; shin = 30.0;
+        } else if (f < 8.5) {
+            // Neon: glowing edge lines over dark paint.
+            base = base * 0.3 + uC2 * step(0.85, fract(p.x * 4.0 + p.y * 2.0)) * (0.9 + 0.3 * sin(uTime * 6.0));
+            specAmt = 0.4; shin = 20.0;
+        } else if (f < 9.5) {
+            // Magma: cooling crust with glowing cracks.
+            float c = abs(sin(p.x * 9.0 + sin(p.y * 7.0 + uTime) * 1.5) * sin(p.y * 8.0 - p.x * 3.0));
+            base = mix(base * 0.3, vec3(1.0, 0.45, 0.1) * (1.2 + 0.3 * sin(uTime * 4.0)), step(c, 0.12));
+            specAmt = 0.2; shin = 10.0;
+        } else if (f < 10.5) {
+            // Frost: icy, pale, crystalline.
+            base = mix(base, vec3(0.8, 0.92, 1.0), 0.45 + 0.25 * step(0.8, hash(floor(p * 20.0))));
+            specAmt = 1.0; shin = 70.0;
+        } else {
+            // Prism: bands of rainbow sliding across.
+            base = mix(base, hue(p.x * 0.8 + p.y * 0.4 - uTime * 0.25), 0.75);
+            specAmt = 1.1; shin = 60.0;
         }
     }
     float diff = max(dot(n, L), 0.0);
@@ -104,7 +148,7 @@ void main() {
     col += vec3(1.0) * specAmt * pow(max(dot(reflect(-L, n), V), 0.0), shin);
     float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);
     col += uC2 * fres * (m > 3.5 ? 0.9 : 0.45);
-    if (f > 4.5 && m < 1.5) col += vec3(0.5, 0.2, 1.0) * fres * 0.6;
+    if (f > 4.5 && f < 5.5 && m < 1.5) col += vec3(0.5, 0.2, 1.0) * fres * 0.6;
     gl_FragColor = vec4(mix(col, vec3(1.0), uFlash), 1.0);
 }
 """
@@ -112,6 +156,7 @@ void main() {
     /** Every sprite: glows, bullets, sparks, beams. See Shape for the numbers. */
     const val SPRITE_VS = """
 uniform mat4 uVp;
+uniform float uZ;
 attribute vec2 aPos;
 attribute vec2 aUv;
 attribute vec4 aCol;
@@ -123,7 +168,7 @@ void main() {
     vUv = aUv;
     vCol = aCol;
     vShape = aShape;
-    gl_Position = uVp * vec4(aPos, 0.6, 1.0);
+    gl_Position = uVp * vec4(aPos, uZ, 1.0);
 }
 """
 
@@ -216,6 +261,7 @@ precision mediump float;
 uniform vec2 uRes;
 uniform float uTime;
 uniform float uScroll;
+uniform float uScrollY;
 uniform vec3 uNebA;
 uniform vec3 uNebB;
 uniform vec3 uPlanetCol;
@@ -248,7 +294,7 @@ float fbm(vec2 p) {
 void main() {
     vec2 p = (vUv - 0.5) * vec2(uRes.x / uRes.y, 1.0) * 2.0;
     vec3 col = vec3(0.012, 0.01, 0.025);
-    vec2 q = p * 1.1 + vec2(uScroll * 0.012, 0.0);
+    vec2 q = p * 1.1 + vec2(uScroll, uScrollY) * 0.012;
     float n1 = fbm(q * 1.2 + vec2(0.0, uTime * 0.01));
     float n2 = fbm(q * 2.2 - vec2(uTime * 0.007, 3.1));
     float norm = uOct < 1.5 ? 1.8 : (uOct < 2.5 ? 1.25 : 1.05);
@@ -258,7 +304,7 @@ void main() {
     for (int l = 0; l < 3; l++) {
         float fl = float(l);
         float scale = 9.0 + fl * 7.0;
-        vec2 sp = p * scale + vec2(uScroll * (0.05 + fl * 0.07) * scale * 0.1, fl * 13.0);
+        vec2 sp = p * scale + vec2(uScroll, uScrollY) * (0.05 + fl * 0.07) * scale * 0.1 + vec2(0.0, fl * 13.0);
         vec2 id = floor(sp);
         vec2 f = fract(sp) - 0.5;
         float h = h21(id + fl * 7.1);

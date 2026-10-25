@@ -140,6 +140,8 @@ object PKind {
     const val CHARGE = 3
     /** A gun for a while; the value is its Primary ordinal. */
     const val WEAPON = 4
+    /** Ore from a mined rock (open-space Mining); the value is how much. */
+    const val ORE = 5
 }
 
 class Pickups(val cap: Int) {
@@ -216,6 +218,8 @@ class Enemy {
     /** Has been on screen: only then can it leave. */
     var entered = false
     var size = 1f
+    /** A friendly ship (hub traffic): never shot, never shoots. */
+    var ally = false
 
     val frac get() = if (maxHp > 0f) hp / maxHp else 0f
 }

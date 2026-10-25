@@ -40,7 +40,11 @@ import androidx.compose.ui.unit.sp
 import dev.m4s4t0.voidwars.audio.Audio
 import dev.m4s4t0.voidwars.audio.Haptics
 import dev.m4s4t0.voidwars.audio.Snd
+import dev.m4s4t0.voidwars.model.Cosmetic
+import dev.m4s4t0.voidwars.model.Currency
 import dev.m4s4t0.voidwars.model.Decal
+import dev.m4s4t0.voidwars.model.Look
+import dev.m4s4t0.voidwars.model.cosmetics
 import dev.m4s4t0.voidwars.model.Finish
 import dev.m4s4t0.voidwars.model.Game
 import dev.m4s4t0.voidwars.model.Loadout
@@ -66,10 +70,11 @@ private val CHANNELS = listOf("Body", "Trim", "Glow")
 
 @Composable
 fun HangarScreen(state: AppState) {
-    var tab by remember { mutableIntStateOf(0) } // 0..5 slots, 6 paint
+    var tab by remember { mutableIntStateOf(0) } // 0..5 slots, 6 paint, 7 style
+    var look by remember { mutableStateOf(Look.TRAIL) }
     var part by remember { mutableStateOf<Part?>(null) }
     var channel by remember { mutableIntStateOf(0) }
-    /** A paint item being tried on: a Swatch, Finish or Decal. */
+    /** A paint item being tried on: a Swatch, Finish, Decal or Cosmetic. */
     var paintPick by remember { mutableStateOf<Any?>(null) }
 
     val fitted = Game.loadout
@@ -77,6 +82,7 @@ fun HangarScreen(state: AppState) {
         is Swatch -> when (channel) { 0 -> fitted.paint.copy(primary = p.id); 1 -> fitted.paint.copy(secondary = p.id); else -> fitted.paint.copy(glow = p.id) }
         is Finish -> fitted.paint.copy(finish = p)
         is Decal -> fitted.paint.copy(decal = p)
+        is Cosmetic -> fitted.paint.with(p)
         else -> fitted.paint
     }
     val preview = (part?.let { fitted.with(it) } ?: fitted).copy(paint = tryPaint)
@@ -98,10 +104,10 @@ fun HangarScreen(state: AppState) {
         Column(Modifier.weight(1.1f).fillMaxHeight().padding(end = 12.dp, bottom = 12.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { WalletChip() }
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items((0..6).toList()) { i ->
+                items((0..7).toList()) { i ->
                     val on = tab == i
-                    val label = if (i < 6) Slot.entries[i].title else "Paint"
-                    val icon = if (i < 6) SLOT_ICON.getValue(Slot.entries[i]) else "paint"
+                    val label = if (i < 6) Slot.entries[i].title else if (i == 6) "Paint" else "Style"
+                    val icon = if (i < 6) SLOT_ICON.getValue(Slot.entries[i]) else if (i == 6) "paint" else "trail"
                     Row(
                         Modifier.squishy { tab = i; part = null; paintPick = null }
                             .glass(RoundedCornerShape(50), if (on) Void.cyan else Void.border, if (on) 0.95f else 0.75f)
@@ -115,7 +121,8 @@ fun HangarScreen(state: AppState) {
             }
             Box(Modifier.weight(1f).fillMaxWidth().glass(RoundedCornerShape(18.dp), alpha = 0.8f)) {
                 if (tab < 6) PartGrid(Slot.entries[tab], part, fitted) { part = it }
-                else PaintPanel(channel, { channel = it; paintPick = null }, paintPick, fitted.paint) { paintPick = it }
+                else if (tab == 6) PaintPanel(channel, { channel = it; paintPick = null }, paintPick, fitted.paint) { paintPick = it }
+                else LookPanel(look, { look = it; paintPick = null }, paintPick as? Cosmetic, fitted.paint) { paintPick = it }
             }
             if (tab < 6) PartActions(part ?: fitted.part(Slot.entries[tab])) { part = null }
             else PaintActions(paintPick, channel) { paintPick = null }
@@ -295,6 +302,7 @@ private fun PaintActions(pick: Any?, channel: Int, onDone: () -> Unit) {
         is Swatch -> Triple(pick.key, pick.price, pick.title)
         is Finish -> Triple(pick.key, pick.price, pick.title + " finish")
         is Decal -> Triple(pick.key, pick.price, pick.title)
+        is Cosmetic -> Triple(pick.key, pick.price, pick.title)
         else -> Triple(null, null, null)
     }
     fun apply() {
@@ -304,6 +312,7 @@ private fun PaintActions(pick: Any?, channel: Int, onDone: () -> Unit) {
                 is Swatch -> when (channel) { 0 -> p.copy(primary = pick.id); 1 -> p.copy(secondary = pick.id); else -> p.copy(glow = pick.id) }
                 is Finish -> p.copy(finish = pick)
                 is Decal -> p.copy(decal = pick)
+                is Cosmetic -> p.with(pick)
                 else -> p
             },
         )
@@ -316,11 +325,70 @@ private fun PaintActions(pick: Any?, channel: Int, onDone: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (key == null || price == null || Game.owns(key, price)) {
-            Text("Tap a colour, finish or pattern to try it on", color = Void.dim, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text("Tap an item to try it on", color = Void.dim, fontSize = 13.sp, modifier = Modifier.weight(1f))
         } else {
             Text(title ?: "", color = Void.text, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             ActionButton("Cancel", primary = false) { onDone() }
-            BuyButton(price) { if (Game.buy(key, price)) apply() }
+            if (price.currency == Currency.REWARD) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Glyph("lock", 14.dp, color = Void.dim, glow = false)
+                Text("Earned in a story line", color = Void.dim, fontSize = 13.sp)
+            } else BuyButton(price) { if (Game.buy(key, price)) apply() }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- style
+
+/** Trails, shot colours, kill bursts, pilot titles and emblems. */
+@Composable
+private fun LookPanel(kind: Look, onKind: (Look) -> Unit, pick: Cosmetic?, paint: Paint, onPick: (Any) -> Unit) {
+    val glow = argbColor(SWATCHES.first { it.id == paint.glow }.argb)
+    val all = cosmetics(kind)
+    LazyVerticalGrid(GridCells.Adaptive(132.dp), Modifier.fillMaxSize().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(Look.entries) { k ->
+                    val on = k == kind
+                    Row(
+                        Modifier.squishy { onKind(k) }.glass(RoundedCornerShape(50), if (on) Void.cyan else Void.border, 0.9f).padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Glyph(k.name.lowercase(), 14.dp, color = if (on) Void.cyan else Void.dim, glow = on)
+                        Text(k.title, color = if (on) Void.text else Void.dim, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Text("${all.count { Game.owns(it) }} of ${all.size} owned", color = Void.dim, fontSize = 11.sp)
+        }
+        items(all, key = { it.key }) { c ->
+            val owned = Game.owns(c)
+            val sel = (pick ?: paint.look(kind)) == c
+            val fitted = paint.look(kind) == c
+            val locked = Game.level < c.price.level
+            val tint = if (c.argb == 0L) glow else argbColor(c.argb)
+            Column(
+                Modifier.squishy { onPick(c) }.clip(RoundedCornerShape(14.dp))
+                    .background(if (sel) Void.cyan.copy(alpha = 0.12f) else Void.panelAlt.copy(alpha = 0.6f))
+                    .border(if (sel) 2.dp else 1.dp, if (sel) Void.cyan else Void.border, RoundedCornerShape(14.dp))
+                    .padding(9.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    when (kind) {
+                        Look.EMBLEM -> Glyph(if (c.id == "none") "close" else c.id, 18.dp, color = if (owned) Void.cyan else Void.dim, glow = owned)
+                        Look.TITLE -> Glyph("title", 16.dp, color = if (owned) Void.cyan else Void.dim, glow = owned)
+                        else -> Box(Modifier.size(16.dp).clip(CircleShape).background(tint).border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape))
+                    }
+                    Text(c.title, color = if (locked) Void.dim else Void.text, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                }
+                when {
+                    fitted -> Text("Fitted", color = Void.ok, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    owned -> Text("Owned", color = Void.dim, fontSize = 12.sp)
+                    else -> PriceTag(c.price, fontSize = 11.sp)
+                }
+            }
         }
     }
 }

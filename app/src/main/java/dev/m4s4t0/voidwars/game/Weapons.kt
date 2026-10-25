@@ -23,8 +23,8 @@ internal class Weapons(private val w: World) {
     val dX = FloatArray(2)
     val dY = FloatArray(2)
     var orbA = 0f
-    val orbs get() = if (w.loadout.support == Support.ORBITALS) 2 + w.ship.supportLevel / 2 else 0
-    val orbR = 1.75f
+    val orbs get() = if (w.loadout.support.base == Support.ORBITALS) 2 + w.ship.supportLevel / 2 + if (w.loadout.support.power > 1f) 2 else 0 else 0
+    val orbR get() = if (w.loadout.support.power > 1f) 2.2f else 1.75f
     var singT = 0f
     var singX = 0f
     var singY = 0f
@@ -32,15 +32,19 @@ internal class Weapons(private val w: World) {
     private var barrageT = 0f
     private var hitSnd = 0f
 
-    val invulnerable get() = w.specialT > 0f && w.loadout.special == Special.OVERDRIVE
+    val invulnerable get() = w.specialT > 0f && w.loadout.special.base == Special.OVERDRIVE
 
     fun reset() {
         fireT = 0.4f; supT = 1f; droneT = 0.5f; laserOn = false; orbA = 0f; singT = 0f; barrageN = 0
         for (k in 0..1) { dX[k] = w.px; dY[k] = w.py }
     }
 
-    private val dmg get() = w.ship.damage
-    private val rate get() = w.ship.fireRate * if (invulnerable) 2.6f else 1f
+    /** Gun damage and rate (a later gun hits harder or faster than its original); support and special damage. */
+    private val dmg get() = w.ship.damage * w.gun.power
+    private val rate get() = w.ship.fireRate * w.gun.rate * if (invulnerable) 2.6f else 1f
+    private val supDmg get() = w.ship.damage * w.loadout.support.power
+    private val supRate get() = w.ship.fireRate * if (invulnerable) 2.6f else 1f
+    private val spDmg get() = w.ship.damage * w.loadout.special.power
 
     fun update(h: Float) {
         val L = w.gunLevel
@@ -48,11 +52,11 @@ internal class Weapons(private val w: World) {
         val y = w.py
         // Only with the trigger held (the demo ship fires by itself), and not while flying in.
         val firing = (w.trigger || w.demo) && w.px > -w.W + 0.3f && w.state == World.State.PLAYING
-        laserOn = firing && w.gun == Primary.LASER
-        laserW = 0.28f + 0.07f * L
+        laserOn = firing && w.gun.base == Primary.LASER
+        laserW = (0.28f + 0.07f * L) * if (w.gun.power > 1f) 1.25f else 1f
         fireT = maxOf(fireT - h * rate, if (firing) -1f else 0f)
         if (firing && fireT <= 0f) {
-            when (w.gun) {
+            when (w.gun.base) {
                 Primary.PULSE -> {
                     fireT += 0.085f
                     val d = 3.6f * dmg * (1f + 0.06f * (L - 1))
@@ -108,7 +112,7 @@ internal class Weapons(private val w: World) {
                     w.sfx.play(Snd.RAIL, 0.4f, 1f, -0.6f, 0)
                     w.shake = maxOf(w.shake, 0.15f)
                 }
-                Primary.FLAK -> {
+                else -> {
                     fireT += 0.32f
                     for (k in -1..1) if (k == 0 || L >= 3) w.shots.add(x, y + k * 0.2f, 24f, k * 2.5f, 0.3f, 6f * dmg, 0.38f, SKind.FLAK)
                     w.sfx.play(Snd.FLAK, 0.3f, 1f, -0.6f, 90)
@@ -126,7 +130,7 @@ internal class Weapons(private val w: World) {
 
     private fun supports(h: Float, firing: Boolean) {
         val sL = w.ship.supportLevel
-        when (w.loadout.support) {
+        when (w.loadout.support.base) {
             Support.NONE -> Unit
             Support.DRONES -> {
                 for (k in 0..1) {
@@ -135,22 +139,22 @@ internal class Weapons(private val w: World) {
                     dX[k] += (tx - dX[k]) * min(1f, h * 8f)
                     dY[k] += (ty - dY[k]) * min(1f, h * 8f)
                 }
-                droneT -= h * rate
+                droneT -= h * supRate
                 if (firing && droneT <= 0f) {
                     droneT = 0.16f
-                    for (k in 0..1) w.shots.add(dX[k] + 0.4f, dY[k], 36f, 0f, 0.18f, 2.2f * dmg * (1f + 0.2f * (sL - 1)), 1.2f, SKind.DRONE)
+                    for (k in 0..1) w.shots.add(dX[k] + 0.4f, dY[k], 36f, 0f, 0.18f, 2.2f * supDmg * (1f + 0.2f * (sL - 1)), 1.2f, SKind.DRONE)
                 }
             }
             Support.MISSILES -> {
                 supT -= h
                 if (firing && supT <= 0f) {
                     supT = 1.3f - 0.12f * sL
-                    for (side in intArrayOf(1, -1)) w.shots.add(w.px - 0.2f, w.py + side * 0.5f, 2f, side * 9f, 0.28f, 9f * dmg * (1f + 0.15f * (sL - 1)), 2.8f, SKind.MISSILE)
+                    for (side in intArrayOf(1, -1)) w.shots.add(w.px - 0.2f, w.py + side * 0.5f, 2f, side * 9f, 0.28f, 9f * supDmg * (1f + 0.15f * (sL - 1)), 2.8f, SKind.MISSILE)
                     w.sfx.play(Snd.MISSILE, 0.3f, 1f, -0.6f, 0)
                 }
             }
             Support.ORBITALS -> orbA += h * 3f
-            Support.TESLA -> {
+            else -> {
                 supT -= h
                 if (firing && supT <= 0f) {
                     supT = 0.75f - 0.06f * sL
@@ -164,9 +168,9 @@ internal class Weapons(private val w: World) {
         var fromX = w.px; var fromY = w.py
         var hits = 0
         val maxHits = 2 + sL
-        val reach = 8f
+        val reach = 8f * if (w.loadout.support.power > 1f) 1.3f else 1f
         var lastSeed = -1
-        val d = 10f * dmg * (1f + 0.2f * (sL - 1))
+        val d = 10f * supDmg * (1f + 0.2f * (sL - 1))
         while (hits < maxHits) {
             var best: Enemy? = null
             var bd = if (hits == 0) reach else 4.5f
@@ -201,14 +205,14 @@ internal class Weapons(private val w: World) {
                 barrageT += 1f / 30f
                 barrageN--
                 val a = (w.random() - 0.5f) * 3f
-                w.shots.add(w.px, w.py, cos(a) * 14f, sin(a) * 14f, 0.3f, 13f * dmg * (1f + 0.25f * (w.ship.specialLevel - 1)), 3f, SKind.MISSILE)
+                w.shots.add(w.px, w.py, cos(a) * 14f, sin(a) * 14f, 0.3f, 13f * spDmg * (1f + 0.25f * (w.ship.specialLevel - 1)), 3f, SKind.MISSILE)
                 w.sfx.play(Snd.MISSILE, 0.3f, 1.3f, 0f, 50)
             }
         }
         if (singT > 0f) {
             singT -= h
             singX += h * 0.8f
-            val power = 70f * dmg * (1f + 0.25f * (w.ship.specialLevel - 1))
+            val power = 70f * spDmg * (1f + 0.25f * (w.ship.specialLevel - 1))
             val b = w.bullets
             var i = b.n - 1
             while (i >= 0) {
@@ -228,7 +232,7 @@ internal class Weapons(private val w: World) {
                 if (!e.alive) continue
                 val dx = singX - e.x; val dy = singY - e.y
                 val d = hypot(dx, dy)
-                if (d < 5f + e.r) {
+                if (d < 5f * (if (w.loadout.special.power > 1f) 1.3f else 1f) + e.r) {
                     val heavy = e.foe == Foe.BOSS || e.foe == Foe.CARRIER
                     w.damage(e, power * h * if (heavy) 0.35f else 1f)
                     if (!heavy && d > 0.3f) { e.vx += dx / d * 18f * h; e.vy += dy / d * 18f * h }
@@ -369,7 +373,7 @@ internal class Weapons(private val w: World) {
                     val e = w.enemies[j]
                     if (!e.alive) continue
                     val rr = e.r * e.size + 0.4f
-                    if ((e.x - ox) * (e.x - ox) + (e.y - oy) * (e.y - oy) < rr * rr) w.damage(e, 35f * dmg * (1f + 0.2f * (sL - 1)) * h)
+                    if ((e.x - ox) * (e.x - ox) + (e.y - oy) * (e.y - oy) < rr * rr) w.damage(e, 35f * supDmg * (1f + 0.2f * (sL - 1)) * h)
                 }
             }
         }

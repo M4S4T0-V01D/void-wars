@@ -258,7 +258,7 @@ object ShipMeshes {
     private const val Q = Mat.GLASS
 
     fun hull(h: Hull): FloatArray = mesh {
-        when (h) {
+        when (h.base) {
             Hull.DART -> {
                 hull(floatArrayOf(1f, 0f, 0.22f, 0.5f, 0.18f, 0.3f, -0.2f, 0.3f, 0.32f, -0.8f, 0.32f, 0.26f, -0.95f, 0.26f, 0.2f), 0.08f, -0.12f, P)
                 hull(floatArrayOf(0.58f, 0f, 0.4f, 0.3f, 0.11f, 0.44f, 0f, 0.12f, 0.42f, -0.2f, 0.07f, 0.38f), 0.24f, 0.1f, Q)
@@ -312,7 +312,7 @@ object ShipMeshes {
                 mirror = true
                 box(-0.3f, 0f, 0.15f, 0.56f, -0.02f, 0.06f, D)
             }
-            Hull.WRAITH -> {
+            else -> {
                 hull(floatArrayOf(0.62f, 0f, 0.3f, 0.2f, 0.2f, 0.34f, -0.6f, 0.3f, 0.32f, -0.95f, 0.2f, 0.22f), 0.1f, -0.12f, P)
                 hull(floatArrayOf(0.3f, 0f, 0.46f, 0.05f, 0.11f, 0.47f, -0.3f, 0.09f, 0.42f), 0.28f, 0.14f, Q)
                 mirror = true
@@ -324,7 +324,7 @@ object ShipMeshes {
     }
 
     /** One wing's outline (x, y pairs); the other side is its mirror. Several polygons for multi-part wings. */
-    private fun wingShapes(w: Wings): List<FloatArray> = when (w) {
+    private fun wingShapes(w: Wings): List<FloatArray> = when (w.base) {
         Wings.SWEPT -> listOf(floatArrayOf(0.2f, 0.25f, -0.6f, 0.95f, -0.82f, 0.95f, -0.6f, 0.25f))
         Wings.DELTA -> listOf(floatArrayOf(0.45f, 0.2f, -0.85f, 0.92f, -0.88f, 0.2f))
         Wings.FORWARD -> listOf(floatArrayOf(-0.1f, 0.25f, 0.38f, 0.95f, 0.22f, 1.02f, -0.62f, 0.25f))
@@ -334,7 +334,7 @@ object ShipMeshes {
         )
         Wings.BLADE -> listOf(floatArrayOf(0f, 0.28f, 0.92f, 0.62f, 0.86f, 0.71f, -0.6f, 0.5f, -0.6f, 0.28f))
         Wings.ARC -> listOf(floatArrayOf(0.1f, 0.25f, -0.08f, 0.7f, -0.42f, 0.98f, -0.82f, 1.02f, -0.56f, 0.76f, -0.46f, 0.25f))
-        Wings.CROWN -> listOf(floatArrayOf(0.12f, 0.25f, 0.02f, 0.82f, -0.2f, 0.5f, -0.36f, 1.02f, -0.5f, 0.5f, -0.72f, 0.86f, -0.8f, 0.25f))
+        else -> listOf(floatArrayOf(0.12f, 0.25f, 0.02f, 0.82f, -0.2f, 0.5f, -0.36f, 1.02f, -0.5f, 0.5f, -0.72f, 0.86f, -0.8f, 0.25f))
     }
 
     fun wings(w: Wings): FloatArray = mesh {
@@ -351,20 +351,20 @@ object ShipMeshes {
     }
 
     /** Where each engine's nozzles sit across the ship (the world uses the same numbers for its exhaust). */
-    fun nozzles(e: Engine): FloatArray = when (e) {
+    fun nozzles(e: Engine): FloatArray = when (e.base) {
         Engine.ION, Engine.FUSION -> floatArrayOf(0f)
         Engine.AFTERBURNER -> floatArrayOf(-0.3f, 0.3f)
-        Engine.QUANTUM -> floatArrayOf(-0.32f, 0f, 0.32f)
+        else -> floatArrayOf(-0.32f, 0f, 0.32f)
     }
 
     fun engine(e: Engine): FloatArray = mesh {
-        val r = when (e) { Engine.ION -> 0.17f; Engine.FUSION -> 0.16f; Engine.AFTERBURNER -> 0.14f; Engine.QUANTUM -> 0.11f }
-        val len = if (e == Engine.AFTERBURNER) 0.42f else 0.32f
+        val r = when (e.base) { Engine.ION -> 0.17f; Engine.FUSION -> 0.16f; Engine.AFTERBURNER -> 0.14f; else -> 0.11f }
+        val len = if (e.base == Engine.AFTERBURNER) 0.42f else 0.32f
         for (y in nozzles(e)) {
             tube(-1.08f, -1.08f + len, y, 0.05f, r, r * 0.8f, 8, D, G)
             tube(-1.0f, -0.95f, y, 0.05f, r * 1.12f, r * 1.12f, 8, T, T)
         }
-        when (e) {
+        when (e.base) {
             Engine.FUSION -> { blob(-0.55f, 0f, 0.3f, 0.13f, 0f, 0, G, 0); at(-0.55f, 0f, 0.3f); ring(0.15f, 0.2f, 0.03f, -0.03f, 12, T) }
             Engine.QUANTUM -> { mirror = true; box(-0.85f, -0.55f, 0.36f, 0.4f, -0.02f, 0.12f, G) }
             else -> {}
@@ -453,7 +453,7 @@ object ShipMeshes {
     // ---------------------------------------------------------------- bosses (radius ~1)
 
     fun boss(b: Boss): FloatArray = mesh {
-        when (b) {
+        when (b.base) {
             Boss.WARDEN -> {
                 ring(0.7f, 1f, 0.2f, -0.2f, 24, P, D)
                 blob(0f, 0f, 0.1f, 0.55f, 0.06f, 2, T, 1)
@@ -497,7 +497,7 @@ object ShipMeshes {
                 tube(-1.15f, -0.85f, 0.32f, 0.12f, 0.14f, 0.12f, 8, D, G)
                 box(0.3f, 0.75f, 0.32f, 0.36f, 0.3f, 0.36f, G)
             }
-            Boss.VOID_HEART -> {
+            else -> {
                 blob(0f, 0f, 0f, 0.5f, 0.08f, 9, G, 1)
                 for (k in 0 until 10) {
                     val a = k * PI.toFloat() / 5
@@ -512,5 +512,106 @@ object ShipMeshes {
                 }
             }
         }
+    }
+
+    // ---------------------------------------------------------------- free-flight stations and objectives (radius ~1)
+
+    /** A station in the hub, one look per [style]: 0 relay, 1 hangar, 2 command, 3 market, 4 rift, 5-7 mode posts. */
+    fun station(style: Int): FloatArray = mesh {
+        when (style) {
+            0 -> {
+                blob(0f, 0f, 0f, 0.4f, 0.05f, 11, P, 1)
+                ring(0.55f, 0.7f, 0.08f, -0.08f, 20, T, D)
+                for (k in 0 until 3) { at(ang = k * 2.094f); box(0.4f, 1.05f, -0.05f, 0.05f, -0.04f, 0.04f, D); box(0.95f, 1.1f, -0.2f, 0.2f, -0.05f, 0.25f, G) }
+                at(); box(-0.05f, 0.05f, -0.05f, 0.05f, 0.3f, 1.0f, D); blob(0f, 0f, 1.0f, 0.1f, 0f, 0, G, 0)
+            }
+            1 -> {
+                ring(0.7f, 1f, 0.22f, -0.22f, 28, P, D)
+                box(-0.45f, 0.45f, -0.35f, 0.35f, -0.3f, 0.35f, T)
+                box(0.3f, 0.48f, -0.25f, 0.25f, -0.15f, 0.25f, G)
+                for (k in 0 until 6) { at(ang = k * 1.047f); box(0.3f, 0.75f, -0.05f, 0.05f, -0.05f, 0.05f, D); box(0.78f, 0.94f, -0.06f, 0.06f, 0.22f, 0.3f, G) }
+            }
+            2 -> {
+                blob(0f, 0f, 0f, 0.45f, 0.04f, 4, T, 1)
+                tube(-0.05f, 0.05f, 0f, 0f, 0.05f, 0.05f, 4, D)
+                ring(0.75f, 0.95f, 0.1f, -0.1f, 24, P, D)
+                ring(0.5f, 0.56f, 0.4f, 0.32f, 18, G)
+                for (k in 0 until 4) { at(ang = k * 1.571f + 0.785f); box(0.4f, 0.8f, -0.04f, 0.04f, -0.03f, 0.03f, D) }
+                at(); box(-0.06f, 0.06f, -0.06f, 0.06f, 0.4f, 1.1f, T); blob(0f, 0f, 1.12f, 0.12f, 0f, 0, G, 0)
+            }
+            3 -> {
+                blob(0f, 0f, 0f, 0.55f, 0.18f, 9, D, 1)
+                for (k in 0 until 7) { at(cos(k * 0.898f) * 0.4f, sin(k * 0.898f) * 0.4f, 0f, k * 0.898f); spike(0.75f, 0.12f, 0f, if (k % 2 == 0) P else T) }
+                at(); ring(0.6f, 0.68f, 0.3f, 0.22f, 7, G)
+                blob(0f, 0f, 0.55f, 0.16f, 0f, 0, G, 0)
+            }
+            4 -> {
+                ring(0.8f, 1f, 0.15f, -0.15f, 9, D, P)
+                ring(0.55f, 0.62f, 0.1f, -0.1f, 18, G)
+                for (k in 0 until 9) { at(cos(k * 0.698f) * 0.95f, sin(k * 0.698f) * 0.95f, 0f, k * 0.698f); spike(0.45f, 0.1f, 0f, T) }
+                at(); blob(0f, 0f, 0f, 0.28f, 0.2f, 13, G, 1)
+            }
+            5 -> {
+                box(-0.6f, 0.6f, -0.25f, 0.25f, -0.2f, 0.2f, P)
+                box(-0.25f, 0.25f, -0.6f, 0.6f, -0.15f, 0.15f, T)
+                blob(0f, 0f, 0.25f, 0.25f, 0f, 0, G, 0)
+                mirror = true
+                box(0.6f, 0.9f, -0.12f, 0.12f, -0.12f, 0.12f, G)
+                box(-0.12f, 0.12f, 0.6f, 0.9f, -0.12f, 0.12f, D)
+            }
+            6 -> {
+                tube(-0.9f, 0.9f, 0f, 0f, 0.3f, 0.3f, 8, P, D)
+                ring(0.55f, 0.75f, 0.12f, -0.12f, 16, T, D)
+                mirror = true
+                slab(floatArrayOf(-0.4f, 0.3f, 0.4f, 0.3f, 0.3f, 1.0f, -0.3f, 1.0f), 0.03f, 0.05f, -0.03f, G)
+            }
+            else -> {
+                blob(0f, 0f, 0f, 0.5f, 0.06f, 21, P, 1)
+                ring(0.7f, 0.85f, 0.06f, -0.06f, 6, T, D)
+                for (k in 0 until 6) { at(ang = k * 1.047f); box(0.5f, 0.72f, -0.04f, 0.04f, -0.03f, 0.03f, D); blob(0.95f, 0f, 0f, 0.13f, 0f, 0, G, 0) }
+            }
+        }
+    }
+
+    /** The hub's centrepiece: a big spinning ring around a core. */
+    fun hubCore(): FloatArray = mesh {
+        ring(0.82f, 1f, 0.06f, -0.06f, 40, P, D)
+        ring(0.5f, 0.56f, 0.12f, -0.12f, 30, T, G)
+        blob(0f, 0f, 0f, 0.3f, 0.05f, 2, T, 1)
+        blob(0f, 0f, 0f, 0.18f, 0f, 0, G, 1)
+        for (k in 0 until 8) { at(ang = k * 0.785f); box(0.3f, 0.84f, -0.02f, 0.02f, -0.02f, 0.02f, D); box(0.95f, 1.05f, -0.06f, 0.06f, 0.04f, 0.12f, G) }
+    }
+
+    fun beacon(): FloatArray = mesh {
+        blob(0f, 0f, 0f, 0.35f, 0f, 0, G, 1)
+        for (k in 0 until 4) { at(ang = k * 1.571f); spike(1f, 0.08f, 0f, T) }
+    }
+
+    fun pod(): FloatArray = mesh {
+        box(-0.6f, 0.6f, -0.4f, 0.4f, -0.4f, 0.4f, P)
+        box(-0.64f, 0.64f, -0.1f, 0.1f, 0.36f, 0.44f, G)
+        mirror = true
+        box(-0.7f, 0.7f, 0.42f, 0.5f, -0.3f, 0.3f, D)
+    }
+
+    fun convoy(): FloatArray = mesh {
+        hull(floatArrayOf(1f, 0f, 0.3f, 0.5f, 0.4f, 0.45f, -0.6f, 0.45f, 0.45f, -1f, 0.35f, 0.35f), 0.15f, -0.25f, P)
+        box(-0.6f, 0.2f, -0.2f, 0.2f, 0.25f, 0.45f, T)
+        box(0.0f, 0.18f, -0.12f, 0.12f, 0.45f, 0.5f, G)
+        mirror = true
+        tube(-1.1f, -0.7f, 0.25f, 0f, 0.12f, 0.15f, 6, D, G)
+        box(-0.7f, 0.4f, 0.45f, 0.62f, -0.15f, 0.15f, D)
+    }
+
+    fun gate(): FloatArray = mesh {
+        ring(0.85f, 1f, 0.1f, -0.1f, 24, T, D)
+        ring(0.6f, 0.66f, 0.04f, -0.04f, 24, G)
+    }
+
+    fun outpost(): FloatArray = mesh {
+        blob(0f, 0f, 0f, 0.55f, 0.04f, 6, P, 1)
+        ring(0.7f, 1f, 0.15f, -0.15f, 8, T, D)
+        for (k in 0 until 4) { at(ang = k * 1.571f); tube(0.8f, 1.25f, 0f, 0.2f, 0.08f, 0.06f, 6, D); box(0.65f, 0.95f, -0.1f, 0.1f, 0.15f, 0.25f, G) }
+        at(); blob(0f, 0f, 0.5f, 0.16f, 0f, 0, G, 0)
     }
 }

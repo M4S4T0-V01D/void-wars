@@ -34,7 +34,7 @@ enum class Song(
     ;
 
     companion object {
-        fun forSector(s: Int) = listOf(RIM, CRIMSON, ION, DEAD, HEART)[s.coerceIn(0, 4)]
+        fun forSector(s: Int) = listOf(RIM, CRIMSON, ION, DEAD, HEART)[s.coerceAtLeast(0) % 5]
     }
 }
 

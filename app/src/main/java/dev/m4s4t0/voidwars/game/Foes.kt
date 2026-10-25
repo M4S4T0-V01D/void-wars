@@ -274,12 +274,12 @@ private fun World.bossThink(e: Enemy, dt: Float, playing: Boolean) {
     if (!playing) return
     val rate = sqrt(Campaign.fireScale(difficulty))
     e.fireT -= dt * rate
-    when (e.boss) {
+    when (e.boss?.base) {
         dev.m4s4t0.voidwars.model.Boss.WARDEN, null -> warden(e)
         dev.m4s4t0.voidwars.model.Boss.HYDRA -> hydra(e)
         dev.m4s4t0.voidwars.model.Boss.TEMPEST -> tempest(e)
         dev.m4s4t0.voidwars.model.Boss.REVENANT -> revenant(e)
-        dev.m4s4t0.voidwars.model.Boss.VOID_HEART -> voidHeart(e)
+        else -> voidHeart(e)
     }
 }
 

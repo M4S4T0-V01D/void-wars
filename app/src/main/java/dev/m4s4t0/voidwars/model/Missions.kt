@@ -26,6 +26,12 @@ object Stat {
     const val MISSIONS = "missions"
     const val STREAK = "streak"
     const val RIFT_BEST_SECONDS = "riftBestSeconds"
+    const val MODE_CLEARS = "modeClears"
+    const val CONTRACTS = "contracts"
+    const val CHAPTERS = "chapters"
+    const val BEACONS = "beacons"
+    const val ORE = "ore"
+    const val PODS = "pods"
 
     /** Counters that hold a best rather than a running total. */
     val BESTS = setOf(BEST_COMBO, RIFT_BEST_SECONDS, STREAK)

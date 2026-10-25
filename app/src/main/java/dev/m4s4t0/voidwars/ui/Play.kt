@@ -58,8 +58,11 @@ import dev.m4s4t0.voidwars.audio.Snd
 import dev.m4s4t0.voidwars.model.Campaign
 import dev.m4s4t0.voidwars.model.Currency
 import dev.m4s4t0.voidwars.model.Game
+import dev.m4s4t0.voidwars.model.Hubs
 import dev.m4s4t0.voidwars.model.Levels
 import dev.m4s4t0.voidwars.model.Outcome
+import dev.m4s4t0.voidwars.model.MissionSpec
+import dev.m4s4t0.voidwars.model.Stories
 import dev.m4s4t0.voidui.Void
 import kotlinx.coroutines.delay
 
@@ -115,7 +118,7 @@ fun PlayScreen(state: AppState) {
                             SpecialButton(h.charge, h.specialOn, Modifier) {
                                 if (h.charge >= 1f && h.specialOn <= 0f) state.view.gl { world.special() }
                             }
-                            FireButton(state, h.crate > 0f)
+                            FireButton(state, h.crate > 0f) { on -> state.view.gl { world.trigger = on } }
                         }
                     }
                 }
@@ -129,6 +132,95 @@ fun PlayScreen(state: AppState) {
     }
 }
 
+/** An open-space mission: the left thumb steers, the right holds the trigger, boosts and fires the special. */
+@Composable
+fun SpaceScreen(state: AppState) {
+    val run = state.run ?: return
+    val spec = run.spec ?: return
+    val h = run.space
+    Box(Modifier.fillMaxSize()) {
+        if (run.outcome == null) {
+            Box(Modifier.fillMaxSize().safe().padding(10.dp)) {
+                if (h != null) {
+                    // Hull and the ally's hull, top left.
+                    Column(Modifier.align(Alignment.TopStart), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        val low = h.hull < 0.3f
+                        val blink = if (low) pulse(300) else 0f
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Glyph("shield", 18.dp, color = if (low) Void.bad else Void.cyan)
+                            Bar(h.hull, Modifier.width(150.dp), 9.dp, color = if (low) androidx.compose.ui.graphics.lerp(Void.bad, Color.White, blink * 0.4f) else null)
+                        }
+                        if (h.ally >= 0f) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Glyph(spec.mode.icon, 18.dp, color = if (h.ally < 0.3f) Void.bad else Void.ok)
+                            Bar(h.ally, Modifier.width(120.dp), 7.dp, color = if (h.ally < 0.3f) Void.bad else Void.ok)
+                        }
+                        Text("${plural(h.kills, "kill")} · ${clock(h.seconds)}", color = Void.dim, fontSize = 11.sp, style = hudStyle())
+                    }
+                    // The objective, top centre.
+                    Column(Modifier.align(Alignment.TopCenter).width(280.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(spec.title.uppercase(), color = Void.text.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, maxLines = 1, style = hudStyle())
+                        val done = if (spec.mode.timed) clock(h.objective.toFloat()) + " / " + clock(h.goal.toFloat()) else "${fmt(h.objective)} / ${fmt(h.goal)}"
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Glyph(spec.mode.icon, 16.dp, color = Void.cyan)
+                            Text(done, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Black, style = hudStyle())
+                        }
+                        Bar(if (h.goal > 0) h.objective.toFloat() / h.goal else 0f, Modifier.fillMaxWidth(0.7f), 4.dp)
+                        if (h.timeLeft >= 0f) Text(clock(h.timeLeft), color = if (h.timeLeft < 10f) Void.bad else CREDIT, fontSize = 14.sp, fontWeight = FontWeight.Black, style = hudStyle())
+                    }
+                    // Score, credits and pause, top right.
+                    Row(Modifier.align(Alignment.TopEnd), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(fmt(h.score), color = Void.text, fontSize = 20.sp, fontWeight = FontWeight.Black, style = hudStyle())
+                            Money(h.credits.toLong(), fontSize = 13.sp, icon = 14.dp)
+                        }
+                        RoundIcon("pause", size = 42.dp) { state.pause(true) }
+                    }
+                    // The trigger, boost and the special, under the right thumb.
+                    Row(Modifier.align(Alignment.BottomEnd), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            SpecialButton(h.charge, h.specialOn, Modifier) {
+                                if (h.charge >= 1f && h.specialOn <= 0f) state.view.gl { space.special() }
+                            }
+                            BoostButton(h.boost) { state.view.gl { space.boost() } }
+                        }
+                        FireButton(state, false) { on -> state.view.gl { space.trigger = on } }
+                    }
+                    Text(
+                        spec.goalText, color = Void.dim, fontSize = 11.sp, style = hudStyle(),
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp),
+                    )
+                }
+                CalloutText(run.callout, Modifier.align(Alignment.Center))
+            }
+            BossBanner(run)
+        }
+        if (run.paused) PauseOverlay(state)
+        if (run.down) DownOverlay(state, run)
+        run.outcome?.let { Debrief(state, it) }
+    }
+}
+
+/** A burst of speed; the ring is the boost meter. */
+@Composable
+internal fun BoostButton(meter: Float, modifier: Modifier = Modifier, onBoost: () -> Unit) {
+    val ready = meter >= 0.3f
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(92.dp).squishy(enabled = ready, sound = false) { Haptics.buzz(Haptics.Kind.CLICK, 0.4f); onBoost() }, contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                val sw = 5.dp.toPx()
+                drawCircle(Color.Black.copy(alpha = 0.45f), size.minDimension / 2 - sw / 2)
+                drawCircle(Color.White.copy(alpha = 0.15f), size.minDimension / 2 - sw / 2, style = Stroke(sw))
+                drawArc(
+                    CREDIT, -90f, 360f * meter.coerceIn(0f, 1f), false,
+                    topLeft = Offset(sw / 2, sw / 2), size = Size(size.width - sw, size.height - sw), style = Stroke(sw, cap = StrokeCap.Round),
+                )
+            }
+            Glyph("boost", 38.dp, color = if (ready) Color.White else Void.dim, glow = ready)
+        }
+        Text("Boost", color = if (ready) CREDIT else Void.dim, fontSize = 11.sp, fontWeight = FontWeight.Bold, style = hudStyle())
+    }
+}
+
 private fun chainColor(n: Int) = when {
     n >= 100 -> Color(0xFFFF4FB8)
     n >= 50 -> Color(0xFFFFC23D)
@@ -137,7 +229,7 @@ private fun chainColor(n: Int) = when {
 }
 
 @Composable
-private fun hudStyle() = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.8f), Offset(0f, 2f), 6f))
+internal fun hudStyle() = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.8f), Offset(0f, 2f), 6f))
 
 /** The big button: a ring that fills as it charges, and pulses when it's ready. */
 @Composable
@@ -169,16 +261,16 @@ private fun SpecialButton(charge: Float, on: Float, modifier: Modifier, onFire: 
 
 /** Hold to fire. Takes its own finger, so the other one keeps steering. */
 @Composable
-private fun FireButton(state: AppState, crate: Boolean) {
+private fun FireButton(state: AppState, crate: Boolean, set: (Boolean) -> Unit) {
     var held by remember { mutableStateOf(false) }
     val accent = if (crate) CRATE else Void.cyan
     fun trigger(on: Boolean) {
         if (held == on) return
         held = on
-        state.view.gl { world.trigger = on }
+        set(on)
         if (on) Haptics.buzz(Haptics.Kind.CLICK, 0.3f)
     }
-    DisposableEffect(Unit) { onDispose { state.view.gl { world.trigger = false } } }
+    DisposableEffect(Unit) { onDispose { set(false) } }
     Box(
         Modifier.size(104.dp).scale(if (held) 0.93f else 1f).pointerInput(Unit) {
             awaitEachGesture {
@@ -230,7 +322,7 @@ private fun GunPanel(h: Hud, onSwap: () -> Unit) {
 private val CRATE = Color(0xFFFF7A1F)
 
 @Composable
-private fun CalloutText(c: Callout?, modifier: Modifier) {
+internal fun CalloutText(c: Callout?, modifier: Modifier) {
     if (c == null) return
     val a = remember(c.id) { Animatable(0f) }
     LaunchedEffect(c.id) { a.animateTo(1f, tween(1400)) }
@@ -296,7 +388,11 @@ private fun PauseOverlay(state: AppState) {
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text("Paused", color = Void.text, fontSize = 26.sp, fontWeight = FontWeight.Black)
-            Text(run.stage?.let { "Stage ${it.title} · ${Campaign.SECTORS[it.sector].title}" } ?: "The Rift", color = Void.dim, fontSize = 13.sp)
+            Text(
+                run.spec?.let { "${it.title} · ${it.sectorInfo.title}" }
+                    ?: run.stage?.let { "Stage ${it.title} · ${Campaign.SECTORS[it.sector].title}" } ?: "The Rift",
+                color = Void.dim, fontSize = 13.sp,
+            )
             ActionButton("Resume", Modifier.fillMaxWidth(), icon = "play") { state.pause(false) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 SmallToggle("music", "Music", Game.music) { Game.music = it; Game.saveSettings() }
@@ -364,6 +460,7 @@ private fun Debrief(state: AppState, o: Outcome) {
     val r = o.result
     val cleared = r.cleared
     val stage = r.stage
+    val spec = r.spec
     var shownStars by remember(o) { mutableIntStateOf(0) }
     LaunchedEffect(o) {
         delay(450)
@@ -375,6 +472,8 @@ private fun Debrief(state: AppState, o: Outcome) {
         }
     }
     val next = stage?.next?.takeIf { cleared && Game.unlocked(it) }
+    // The next story chapter, once this one's beaten.
+    val nextChapter = spec?.storyId?.let(Stories::chapter)?.let { c -> Stories.all[c.mode]?.getOrNull(c.index + 1) }?.takeIf { cleared && Game.chapterOpen(it) }
     Scrim {
         Row(
             Modifier.widthIn(max = 640.dp).glass(RoundedCornerShape(26.dp), if (cleared) Void.cyan.copy(alpha = 0.6f) else Void.border, 0.95f).padding(20.dp),
@@ -383,13 +482,14 @@ private fun Debrief(state: AppState, o: Outcome) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     when {
+                        spec != null -> if (cleared) "${spec.title} complete!" else "Mission failed"
                         stage == null -> "Rift run over"
                         cleared -> "Stage ${stage.title} clear!"
                         else -> "Mission failed"
                     },
-                    color = if (cleared || stage == null) Void.text else Void.bad, fontSize = 26.sp, fontWeight = FontWeight.Black,
+                    color = if (cleared || (stage == null && spec == null)) Void.text else Void.bad, fontSize = 26.sp, fontWeight = FontWeight.Black,
                 )
-                if (stage != null && cleared) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if ((stage != null || spec != null) && cleared) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     for (i in 1..3) {
                         val on = i <= shownStars
                         val s = remember { Animatable(0f) }
@@ -409,22 +509,38 @@ private fun Debrief(state: AppState, o: Outcome) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Money((r.credits + o.reward.credits).toLong(), fontSize = 18.sp, icon = 20.dp)
                     if (o.reward.cores > 0) Money(o.reward.cores.toLong(), Currency.CORES, fontSize = 18.sp, icon = 20.dp)
+                    if (o.reward.shards > 0) Money(o.reward.shards.toLong(), Currency.SHARDS, fontSize = 18.sp, icon = 20.dp)
                     Text("+${o.reward.xp + r.kills / 2} XP", color = Void.violet, fontSize = 16.sp, fontWeight = FontWeight.Black)
                 }
+                if (o.firstClear && spec?.storyId != null) Text("Chapter complete: story bonus paid", color = Void.ok, fontSize = 12.sp)
+                if (o.contractDone) Text("Contract fulfilled: bonus paid", color = Void.ok, fontSize = 12.sp)
+                o.unlocked?.let { Text("Unlocked: ${Game.itemTitle(it)}!", color = SHARD, fontSize = 15.sp, fontWeight = FontWeight.Black) }
                 if (o.firstClear && stage != null) Text(if (stage.isBoss) "First clear: double pay and boss cores" else "First clear: double pay", color = Void.ok, fontSize = 12.sp)
+                if (o.firstClear && stage != null && stage.isBoss) Hubs.all.getOrNull(stage.sector + 1)?.let {
+                    Text("New hub charted: ${it.title}. The operation moves on.", color = Color(it.glow), fontSize = 15.sp, fontWeight = FontWeight.Black)
+                }
                 if (o.levelAfter > o.levelBefore) Text("Pilot level ${o.levelAfter}!", color = CREDIT, fontSize = 15.sp, fontWeight = FontWeight.Black)
                 val (lvl, into, need) = Levels.of(Game.xp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Lv $lvl", color = Void.text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     Bar(into.toFloat() / need, Modifier.width(160.dp), 6.dp)
                 }
-                if (!cleared && stage != null) Text(tip(r.hits, r.seconds), color = Void.dim, fontSize = 12.sp)
+                if (!cleared && (stage != null || spec != null)) Text(tip(r.hits, r.seconds), color = Void.dim, fontSize = 12.sp)
             }
             Column(Modifier.width(190.dp), verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
+                if (spec != null) {
+                    if (nextChapter != null) ActionButton("Next: ${nextChapter.title}", Modifier.fillMaxWidth(), icon = "next") { state.launch(nextChapter.spec()) }
+                    ActionButton(if (cleared) "Again" else "Retry", Modifier.fillMaxWidth(), icon = "retry", primary = nextChapter == null) {
+                        state.launch(if (spec.storyId != null || spec.contractId != null) spec else MissionSpec.quick(spec.mode, spec.sector, (System.nanoTime() and 0xFFFFFF).toInt()))
+                    }
+                    ActionButton("Hangar", Modifier.fillMaxWidth(), icon = "hangar", primary = false) { state.go(Screen.HANGAR) }
+                    ActionButton("Hub", Modifier.fillMaxWidth(), icon = "home", primary = false) { state.hub() }
+                    return@Column
+                }
                 if (next != null) ActionButton("Next: ${next.title}", Modifier.fillMaxWidth(), icon = "next") { state.launch(next) }
                 ActionButton(if (stage == null) "Again" else "Retry", Modifier.fillMaxWidth(), icon = "retry", primary = next == null) { state.launch(stage) }
                 ActionButton("Hangar", Modifier.fillMaxWidth(), icon = "hangar", primary = false) { state.go(Screen.HANGAR) }
-                ActionButton(if (stage == null) "Home" else "Map", Modifier.fillMaxWidth(), icon = if (stage == null) "home" else "map", primary = false) {
+                ActionButton(if (stage == null) (if (state.fromHub) "Hub" else "Home") else "Map", Modifier.fillMaxWidth(), icon = if (stage == null) "home" else "map", primary = false) {
                     if (stage != null) state.mapStage = next ?: stage
                     state.go(if (stage == null) Screen.HOME else Screen.MAP)
                 }

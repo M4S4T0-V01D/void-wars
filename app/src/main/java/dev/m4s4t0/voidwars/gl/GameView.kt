@@ -7,6 +7,7 @@ import android.view.MotionEvent
 import android.view.Surface
 import android.view.SurfaceHolder
 import dev.m4s4t0.voidwars.game.Hud
+import dev.m4s4t0.voidwars.game.SpaceHud
 import dev.m4s4t0.voidwars.game.World
 import dev.m4s4t0.voidwars.game.WorldEvent
 import dev.m4s4t0.voidwars.game.WorldListener
@@ -26,6 +27,7 @@ class GameView(ctx: Context, private val quality: Quality, private val cap60: Bo
         object : WorldListener {
             override fun hud(h: Hud) { post { listener.hud(h) } }
             override fun event(e: WorldEvent) { post { listener.event(e) } }
+            override fun space(h: SpaceHud) { post { listener.space(h) } }
         },
     )
     private var lastX = 0f
@@ -60,7 +62,7 @@ class GameView(ctx: Context, private val quality: Quality, private val cap60: Bo
         super.onSizeChanged(w, h, oldw, oldh)
         if (w > 0 && h > 0) {
             holder.setFixedSize((w * quality.scale).toInt(), (h * quality.scale).toInt())
-            gl { viewH = h; world.W = World.H * w / h }
+            gl { viewH = h; viewW = w; world.W = World.H * w / h }
         }
     }
 
@@ -98,5 +100,13 @@ class GameView(ctx: Context, private val quality: Quality, private val cap60: Bo
 
     private fun send(action: Int, id: Int, x: Float, y: Float) = queueEvent {
         if (renderer.mode == GameRenderer.Mode.PLAY && !renderer.paused) renderer.world.touch(action, id, x, y)
+        else if (renderer.mode == GameRenderer.Mode.SPACE && !renderer.paused) with(renderer.space) {
+            when (action) {
+                0 -> touchDown(id, x, y)
+                1 -> touchMove(id, x, y)
+                2 -> touchUp(id)
+                else -> touchCancel()
+            }
+        }
     }
 }

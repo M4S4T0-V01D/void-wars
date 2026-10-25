@@ -2,8 +2,16 @@ package dev.m4s4t0.voidwars
 
 import dev.m4s4t0.voidwars.gl.ShipMeshes
 import dev.m4s4t0.voidwars.model.Boss
+import dev.m4s4t0.voidwars.model.COSMETICS
+import dev.m4s4t0.voidwars.model.Decal
+import dev.m4s4t0.voidwars.model.Finish
+import dev.m4s4t0.voidwars.model.MissionSpec
+import dev.m4s4t0.voidwars.model.Mode
+import dev.m4s4t0.voidwars.model.SWATCHES
+import dev.m4s4t0.voidwars.model.Stories
 import dev.m4s4t0.voidwars.model.Campaign
 import dev.m4s4t0.voidwars.model.Engine
+import dev.m4s4t0.voidwars.model.Hubs
 import dev.m4s4t0.voidwars.model.Hull
 import dev.m4s4t0.voidwars.model.Levels
 import dev.m4s4t0.voidwars.model.Loadout
@@ -52,7 +60,8 @@ class ModelTest {
             assertEquals(s.isBoss, w.any { it.boss != null })
             assertEquals(s, Stage.parse(s.id))
         }
-        assertEquals(null, Stage(4, 5).next)
+        assertEquals(null, Stage(Campaign.SECTORS.size - 1, Campaign.STAGES - 1).next)
+        assertEquals(Stage(5, 0), Stage(4, 5).next)
         assertEquals(Stage(1, 0), Stage(0, 5).next)
     }
 
@@ -91,5 +100,47 @@ class ModelTest {
         ok("gunship", ShipMeshes.gunship()); ok("spinner", ShipMeshes.spinner()); ok("mine", ShipMeshes.mine())
         ok("lancer", ShipMeshes.lancer()); ok("carrier", ShipMeshes.carrier())
         repeat(6) { ok("rock $it", ShipMeshes.rock(it)) }
+    }
+
+    @Test
+    fun storyLinesAreCompleteAndTheirRewardsExist() {
+        val keys = (Loadout.ALL_PARTS.values.flatten().map { it.key } + SWATCHES.map { it.key } + Finish.entries.map { it.key } +
+            Decal.entries.map { it.key } + COSMETICS.map { it.key }).toSet()
+        assertEquals(10, Mode.entries.size)
+        for (m in Mode.entries) {
+            val ch = Stories.all.getValue(m)
+            assertEquals(m.name, Stories.CHAPTERS, ch.size)
+            for (c in ch) {
+                assertEquals(c, Stories.chapter(c.id))
+                c.unlock?.let { assertTrue("${c.id} unlocks unknown $it", it in keys) }
+                assertTrue(c.spec().goal > 0)
+            }
+        }
+        assertTrue(Stories.LAST_LIGHT in keys)
+    }
+
+    @Test
+    fun cosmeticsAreUniqueAndPlentiful() {
+        assertTrue(COSMETICS.size >= 120)
+        assertEquals(COSMETICS.size, COSMETICS.map { it.key }.toSet().size)
+        assertEquals(20, Campaign.SECTORS.size)
+    }
+
+    @Test
+    fun aHubForEverySector() {
+        assertEquals(Campaign.SECTORS.size + 1, Hubs.all.size)
+        assertEquals(Hubs.all.size, Hubs.all.map { it.title }.toSet().size)
+        assertEquals(Hubs.all.size, Hubs.all.map { it.scenery }.toSet().size)
+        for ((i, th) in Hubs.all.withIndex()) {
+            assertEquals(i - 1, th.sector)
+            assertTrue(th.title, th.planetSize > 0f && th.rocks >= 0 && th.traffic > 0)
+        }
+    }
+
+    @Test
+    fun quickMissionsAreDeterministic() {
+        for (m in Mode.entries) for (sec in 0 until Campaign.SECTORS.size step 5) {
+            assertEquals(MissionSpec.quick(m, sec, 42), MissionSpec.quick(m, sec, 42))
+        }
     }
 }

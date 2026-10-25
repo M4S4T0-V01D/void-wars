@@ -7,6 +7,9 @@ import dev.m4s4t0.voidwars.model.Boss
 import dev.m4s4t0.voidwars.model.Campaign
 import dev.m4s4t0.voidwars.model.Engine
 import dev.m4s4t0.voidwars.model.Foe
+import dev.m4s4t0.voidwars.model.Formation
+import dev.m4s4t0.voidwars.model.MissionSpec
+import dev.m4s4t0.voidwars.model.Mode
 import dev.m4s4t0.voidwars.model.Loadout
 import dev.m4s4t0.voidwars.model.Primary
 import dev.m4s4t0.voidwars.model.RunResult
@@ -55,6 +58,10 @@ data class Hud(
     val gun: Primary,
     val swapTo: Primary?,
     val crate: Float,
+    /** A mission mode's goal so far, its target and the seconds left (-1: no clock). */
+    val objective: Int = 0,
+    val goal: Int = 0,
+    val timeLeft: Float = -1f,
 )
 
 sealed interface WorldEvent {
@@ -64,11 +71,15 @@ sealed interface WorldEvent {
     data class Died(val canRevive: Boolean) : WorldEvent
     data class Finished(val result: RunResult) : WorldEvent
     data class Callout(val text: String, val big: Boolean = false) : WorldEvent
+    /** The autopilot has brought the ship in to a hub station. */
+    data class Docked(val station: Station) : WorldEvent
 }
 
 interface WorldListener {
     fun hud(h: Hud)
     fun event(e: WorldEvent)
+    /** The open-space HUD (the hub and the free-flight modes). */
+    fun space(h: SpaceHud) {}
 }
 
 /**
@@ -114,6 +125,9 @@ class World(val sfx: Sfx = DeviceSfx) {
     var demo = false
         private set
     var stage: Stage? = null
+    /** Survival, Boss Rush or Blitz: a mission flown on the side-scroller. */
+    var spec: MissionSpec? = null
+    var objective = 0
         private set
     val rift get() = stage == null && !demo
     var difficulty = 0f
@@ -146,6 +160,8 @@ class World(val sfx: Sfx = DeviceSfx) {
     private var sinceHit = 99f
     var glow = 0xFF22E3FF.toInt()
     var trim = 0xFFA970FF.toInt()
+    /** The fitted trail, shot colour and kill burst. */
+    val flair = Flair()
     var charge = 0f
     var specialT = 0f
     var specialMax = 1f
@@ -200,14 +216,17 @@ class World(val sfx: Sfx = DeviceSfx) {
     // ---------------------------------------------------------------- starting
 
     /** A stage, the Rift (stage = null) or the menu's attract loop (demo). */
-    fun start(l: Loadout, stats: ShipStats, s: Stage?, demo: Boolean = false, quality: Float = 1f) {
+    fun start(l: Loadout, stats: ShipStats, s: Stage?, demo: Boolean = false, quality: Float = 1f, spec: MissionSpec? = null) {
         loadout = l
+        this.spec = spec
+        objective = 0
         ship = stats
         stage = s
         this.demo = demo
         parts.limit = (parts.cap * quality).toInt().coerceAtLeast(400)
         glow = argb(swatch(l.paint.glow).argb)
         trim = argb(swatch(l.paint.secondary).argb)
+        flair.set(l.paint, glow)
         bullets.n = 0; shots.n = 0; parts.n = 0; pickups.n = 0
         for (i in 0 until ne) enemies[i].alive = false
         ne = 0
@@ -227,6 +246,7 @@ class World(val sfx: Sfx = DeviceSfx) {
         wpn.reset()
         when {
             demo -> { sector = 0; difficulty = 0.5f }
+            spec != null -> { sector = spec.sector; difficulty = spec.difficulty }
             s != null -> {
                 sector = s.sector
                 difficulty = s.difficulty
@@ -315,9 +335,10 @@ class World(val sfx: Sfx = DeviceSfx) {
     /** A crate with a different gun from the one firing now. */
     private fun dropCrate(x: Float, y: Float) {
         if (demo) return
-        val all = Primary.entries
+        // Only the original guns come in crates; the later ones have to be bought.
+        val all = Primary.entries.filter { it.base == it }
         var p = all[rnd.nextInt(all.size)]
-        if (p == gun) p = all[(p.ordinal + 1 + rnd.nextInt(all.size - 1)) % all.size]
+        if (p == gun.base) p = all[(all.indexOf(p) + 1 + rnd.nextInt(all.size - 1)) % all.size]
         drop(x, y, PKind.WEAPON, p.ordinal)
     }
 
@@ -346,12 +367,14 @@ class World(val sfx: Sfx = DeviceSfx) {
                 Hud(
                     hull, score, credits, chain, mult, charge, if (specialMax > 0f) specialT / specialMax else 0f, progress(),
                     boss?.frac ?: 0f, boss?.boss, t, grazes, gun, swapTo, crateT / CRATE_SECONDS,
+                    objective, spec?.goal ?: 0, spec?.let { if (it.seconds > 0f) max(0f, it.seconds - dirT) else -1f } ?: -1f,
                 ),
             )
         }
     }
 
     private fun progress(): Float = when {
+        spec != null -> spec!!.let { m -> (objective.toFloat() / m.goal.coerceAtLeast(1)).coerceIn(0f, 1f) }
         stage == null -> 0f
         state == State.CLEAR || state == State.OVER -> 1f
         else -> (dirT / (stageEnd + 1f)).coerceIn(0f, 1f)
@@ -411,6 +434,7 @@ class World(val sfx: Sfx = DeviceSfx) {
     private fun director(dt: Float) {
         if (demo) { demoDirector(dt); return }
         dirT += dt
+        val m = spec
         pendingBoss?.let { w ->
             warnT -= dt
             if (warnT <= 0f) {
@@ -420,7 +444,8 @@ class World(val sfx: Sfx = DeviceSfx) {
             return
         }
         val s = stage
-        if (s != null) {
+        if (m != null) modeDirector(m)
+        else if (s != null) {
             while (waveIdx < waves.size && waves[waveIdx].at <= dirT) {
                 val w = waves[waveIdx++]
                 if (w.boss != null) {
@@ -436,7 +461,7 @@ class World(val sfx: Sfx = DeviceSfx) {
             // The Rift: everything, getting harder, until you fall. No new waves while a boss is up.
             if (boss != null) { dirT -= dt; return }
             difficulty = Campaign.riftDifficulty(dirT)
-            sector = min(4, (difficulty / 1.2f).toInt())
+            sector = min(Campaign.SECTORS.size - 1, (difficulty / 1.2f).toInt())
             if (dirT >= riftNext) {
                 val w = Campaign.riftWave(dirT, ++riftN, rnd)
                 riftNext = dirT + Campaign.riftGap(w.formation, dirT)
@@ -447,6 +472,48 @@ class World(val sfx: Sfx = DeviceSfx) {
                 } else spawnWave(w, difficulty)
             }
         }
+    }
+
+    /** The side-scrolling mission modes: Rift-style waves at the mission's difficulty, each with its own goal. */
+    private fun modeDirector(m: MissionSpec) {
+        when (m.mode) {
+            Mode.BOSS_RUSH -> {
+                objective = bossKills
+                if (boss != null) return
+                if (objective >= m.goal) { if (liveFoes() == 0) clear(); return }
+                if (dirT < 2f) return
+                // Every boss in turn, from the mission's sector on, each a little tougher.
+                val bosses = Campaign.SECTORS.map { it.boss }
+                val b = bosses[(m.sector + objective) % bosses.size]
+                difficulty = m.difficulty + objective * 0.4f
+                pendingBoss = Wave(dirT, Formation.BOSS, 1, 0f, rnd.nextInt(), b); warnT = 2.6f
+                sfx.play(Snd.WARNING, 0.8f, minGapMs = 0)
+                listener?.event(WorldEvent.BossWarning(b))
+            }
+            Mode.SURVIVAL -> {
+                objective = dirT.toInt()
+                if (objective >= m.goal) { clear(); return }
+                if (boss != null) return
+                difficulty = m.difficulty + dirT / 45f
+                modeWave(m, 1f)
+            }
+            else -> {
+                // Blitz: no bosses, waves come thick and fast, the clock runs.
+                objective = score.toInt().coerceAtLeast(0)
+                if (dirT >= m.seconds) { if (score >= m.goal) clear() else finish(false); return }
+                difficulty = m.difficulty + dirT / 90f
+                modeWave(m, 0.55f)
+            }
+        }
+    }
+
+    private fun modeWave(m: MissionSpec, gap: Float) {
+        if (dirT < riftNext) return
+        val sec = Campaign.SECTORS[m.sector.coerceIn(Campaign.SECTORS.indices)]
+        val n = ++riftN
+        val w = if (n % 9 == 0) Wave(dirT, Formation.ELITE, 1, 0f, rnd.nextInt()) else Campaign.wave(dirT, Campaign.pick(sec.roster, rnd), difficulty, rnd)
+        riftNext = dirT + Campaign.gap(w.formation) * gap
+        spawnWave(w, difficulty)
     }
 
     private fun demoDirector(dt: Float) {
@@ -491,7 +558,7 @@ class World(val sfx: Sfx = DeviceSfx) {
             WorldEvent.Finished(
                 RunResult(
                     stage, cleared, score, credits, kills, rocks, elites, bossKills, spawned, grazes, pickupsN, specials,
-                    if (cleared) hull else 0f, hits, t, bestChain, chains25,
+                    if (cleared) hull else 0f, hits, t, bestChain, chains25, spec, objective,
                 ),
             ),
         )
@@ -554,16 +621,16 @@ class World(val sfx: Sfx = DeviceSfx) {
         trailT = 1f / 70f
         val e = loadout.engine
         val len = e.trail
-        val offs = when (e) {
+        val offs = when (e.base) {
             Engine.ION, Engine.FUSION -> floatArrayOf(0f)
             Engine.AFTERBURNER -> floatArrayOf(-0.3f, 0.3f)
-            Engine.QUANTUM -> floatArrayOf(-0.32f, 0f, 0.32f)
+            else -> floatArrayOf(-0.32f, 0f, 0.32f)
         }
         val back = -0.95f
         for (o in offs) {
             val ex = px + back
             val ey = py + o * cos(bank)
-            parts.add(ex, ey, -9f * len + pvx * 0.3f + rnd.nextFloat() - 0.5f, (rnd.nextFloat() - 0.5f) * 1.2f, 0.18f * len, 0.42f, glow, Shape.SOFT, 3f, -1.2f)
+            flair.puff(parts, rnd, ex, ey, -9f * len + pvx * 0.3f, 0f, 0f, 1f, len)
             if (rnd.nextFloat() < 0.5f) parts.add(ex, ey, -12f * len, (rnd.nextFloat() - 0.5f) * 2f, 0.12f * len, 0.2f, 0xFFFFFFFF.toInt(), Shape.SPARK, 2f)
         }
     }
@@ -611,14 +678,14 @@ class World(val sfx: Sfx = DeviceSfx) {
         specialReady = false
         specials++
         val lvl = ship.specialLevel
-        val power = 1f + 0.25f * (lvl - 1)
         val kind = loadout.special
+        val power = (1f + 0.25f * (lvl - 1)) * kind.power
         specialMax = kind.seconds * (1f + 0.1f * (lvl - 1))
         specialT = specialMax
         sfx.play(Snd.SPECIAL, minGapMs = 0)
         sfx.buzz(Haptics.Kind.BIG_BOOM, 0.8f)
         shake = 1.2f
-        when (kind) {
+        when (kind.base) {
             Special.NOVA -> {
                 clearBullets(true)
                 for (i in 0 until ne) {
@@ -626,7 +693,7 @@ class World(val sfx: Sfx = DeviceSfx) {
                     if (!e.alive || !onScreen(e)) continue
                     damage(e, 140f * power * ship.damage * if (e.foe == Foe.BOSS || e.foe == Foe.CARRIER) 0.35f else 1f)
                 }
-                ring(px, py, glow, 1.4f, 40f)
+                ring(px, py, glow, 1.4f * kind.power, 40f)
                 ring(px, py, 0xFFFFFFFF.toInt(), 0.9f, 30f)
                 flash = 0.9f; flashColor = glow
                 iframes = max(iframes, 1.5f)
@@ -634,7 +701,7 @@ class World(val sfx: Sfx = DeviceSfx) {
             Special.OVERDRIVE -> { ring(px, py, 0xFFFFD050.toInt(), 0.6f, 14f); flash = 0.4f; flashColor = 0xFFFFD050.toInt() }
             Special.PHASE -> { ring(px, py, 0xFF9A7CFF.toInt(), 0.8f, 20f); flash = 0.4f; flashColor = 0xFF9A7CFF.toInt() }
             Special.SINGULARITY -> wpn.singularity(px + 7f, py)
-            Special.BARRAGE -> { wpn.barrage((24 + 6 * lvl)); flash = 0.3f; flashColor = glow }
+            else -> { wpn.barrage(((24 + 6 * lvl) * kind.power).toInt()); flash = 0.3f; flashColor = glow }
         }
     }
 
@@ -643,7 +710,7 @@ class World(val sfx: Sfx = DeviceSfx) {
             specialT -= h
             if (specialT <= 0f) specialT = 0f
         }
-        timeScale = if (specialT > 0f && loadout.special == Special.PHASE) 0.4f else 1f
+        timeScale = if (specialT > 0f && loadout.special.base == Special.PHASE) (if (loadout.special != Special.PHASE) 0.3f else 0.4f) else 1f
         if (charge >= 1f && !specialReady) {
             specialReady = true
             sfx.play(Snd.CHARGED, 0.8f, minGapMs = 0)
@@ -661,7 +728,7 @@ class World(val sfx: Sfx = DeviceSfx) {
     fun newEnemy(foe: Foe, x: Float, y: Float, d: Float, counted: Boolean = true): Enemy? {
         if (ne >= enemies.size) return null
         val e = enemies[ne++]
-        e.alive = true
+        e.alive = true; e.ally = false
         e.foe = foe
         e.boss = null
         e.mode = 0
@@ -759,9 +826,10 @@ class World(val sfx: Sfx = DeviceSfx) {
                 }
                 sfx.buzz(Haptics.Kind.TICK, 0.3f + e.r * 0.2f)
             }
-            Foe.BOSS -> bossDown(e)
+            Foe.BOSS -> { bossDown(e); flair.kill(parts, rnd, e.x, e.y, 3f) }
             Foe.CARRIER -> {
                 elites++
+                flair.kill(parts, rnd, e.x, e.y, 2.6f)
                 explode(e.x, e.y, 2.6f, BULLET_COLORS[ORANGE])
                 for (k in 0 until 5) explode(e.x + rnd.nextFloat() * 3f - 1.5f, e.y + rnd.nextFloat() * 2f - 1f, 1.2f, 0xFFFFC060.toInt())
                 drop(e.x, e.y, PKind.REPAIR, 1)
@@ -776,6 +844,7 @@ class World(val sfx: Sfx = DeviceSfx) {
             else -> {
                 val big = e.r > 0.8f
                 explode(e.x, e.y, e.r * 1.4f, BULLET_COLORS[if (big) ORANGE else PINK])
+                flair.kill(parts, rnd, e.x, e.y, e.r * 1.4f)
                 sfx.play(if (big) Snd.BIG_BOOM else Snd.BOOM, if (big) 0.8f else 0.55f, 1f, pan, if (big) 40 else 35)
                 sfx.buzz(if (big) Haptics.Kind.BOOM else Haptics.Kind.TICK, if (big) 0.8f else 0.4f)
                 if (big) shake = max(shake, 0.4f)
@@ -1021,7 +1090,7 @@ class World(val sfx: Sfx = DeviceSfx) {
     private fun collide(h: Float, wdt: Float) {
         wpn.hitEnemies(h)
         if (!alive || state != State.PLAYING || demo) return
-        val phase = specialT > 0f && loadout.special == Special.PHASE
+        val phase = specialT > 0f && loadout.special.base == Special.PHASE
         val hb = ship.hitbox
         val gz = ship.graze
         val b = bullets
@@ -1164,7 +1233,7 @@ class World(val sfx: Sfx = DeviceSfx) {
     private fun spawnBoss(which: Boss, d: Float) {
         val e = newEnemy(Foe.BOSS, W + 5f, 0f, d) ?: return
         e.boss = which
-        val mul = when (which) { Boss.WARDEN -> 0.8f; Boss.HYDRA -> 1f; Boss.TEMPEST -> 1.1f; Boss.REVENANT -> 1.2f; Boss.VOID_HEART -> 1.4f }
+        val mul = which.might * when (which.base) { Boss.WARDEN -> 0.8f; Boss.HYDRA -> 1f; Boss.TEMPEST -> 1.1f; Boss.REVENANT -> 1.2f; else -> 1.4f }
         e.maxHp *= mul * if (rift) 0.8f else 1f
         e.hp = e.maxHp
         e.r = 2.6f

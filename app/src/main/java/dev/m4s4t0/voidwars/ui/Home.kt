@@ -30,6 +30,7 @@ import dev.m4s4t0.voidwars.audio.Haptics
 import dev.m4s4t0.voidwars.audio.Snd
 import dev.m4s4t0.voidwars.model.Campaign
 import dev.m4s4t0.voidwars.model.Game
+import dev.m4s4t0.voidwars.model.Mode
 import dev.m4s4t0.voidwars.model.Stat
 import dev.m4s4t0.voidui.Void
 
@@ -73,8 +74,12 @@ fun HomeScreen(state: AppState) {
             ) {
                 val stars = Game.stars[next.id] ?: 0
                 BigButton(
+                    "dock", "Fly to the hub", "Stations, contracts, the black market and ${Mode.entries.size} mission lines",
+                    accent = Void.violet, height = 72.dp,
+                ) { state.hub() }
+                BigButton(
                     "launch", "Launch ${next.title}", if (next.isBoss) "Boss: ${sector.boss.title}" else if (stars > 0) "Replay for more stars" else sector.subtitle,
-                    accent = if (next.isBoss) Void.bad else Void.violet, height = 72.dp,
+                    accent = if (next.isBoss) Void.bad else Color(0xFF9B6BFF), phase = 1,
                 ) { state.launch(next) }
                 BigButton("campaign", "Campaign", "${Campaign.allStages.sumOf { Game.stars[it.id] ?: 0 }} / ${Campaign.allStages.size * 3} stars", accent = Void.cyan, phase = 1) { state.go(Screen.MAP) }
                 BigButton("hangar", "Hangar", "Build and paint your ship", accent = Color(0xFF3D7BFF), phase = 2) { state.go(Screen.HANGAR) }

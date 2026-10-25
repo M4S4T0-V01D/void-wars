@@ -30,7 +30,10 @@ enum class Quality(val title: String, val scale: Float, val msaa: Boolean, val p
     HIGH("Beautiful", 1f, true, 1f, 3),
 }
 
-/** What a run brought home, from the engine. [stage] is null for the Rift. */
+/**
+ * What a run brought home, from the engine. [stage] is null for the Rift and the mission modes; [spec] is set for a
+ * mission mode, and [objective] is how far its goal got.
+ */
 data class RunResult(
     val stage: Stage?,
     val cleared: Boolean,
@@ -49,6 +52,8 @@ data class RunResult(
     val seconds: Float,
     val bestChain: Int,
     val chains25: Int,
+    val spec: MissionSpec? = null,
+    val objective: Int = 0,
 )
 
 /** The debrief: what the run earned on top of what was picked up. */
@@ -60,6 +65,9 @@ data class Outcome(
     val newBest: Boolean,
     val levelBefore: Int,
     val levelAfter: Int,
+    /** What the story chapter handed over, if this was its first clear. */
+    val unlocked: String? = null,
+    val contractDone: Boolean = false,
 )
 
 /**
@@ -74,6 +82,9 @@ object Game {
         private set
     var cores by mutableIntStateOf(0)
         private set
+    /** The Black Market's currency: dug out of salvage, contracts and the harder bosses. */
+    var shards by mutableIntStateOf(0)
+        private set
     var xp by mutableLongStateOf(0L)
         private set
     var loadout by mutableStateOf(Loadout())
@@ -84,10 +95,25 @@ object Game {
     val stars = mutableStateMapOf<String, Int>()
     val best = mutableStateMapOf<String, Long>()
     var riftBest by mutableLongStateOf(0L)
+    /** The hub the pilot is based at ([Hubs.all]). */
+    var hubAt by mutableIntStateOf(0)
         private set
     val medals = mutableStateListOf<String>()
     val missions = mutableStateListOf<Mission>()
     var supplyReady by mutableStateOf(false)
+        private set
+    /** Story chapters cleared, per mode. */
+    val story = mutableStateMapOf<String, Int>()
+    /** Today's contracts board, and the ones done today. */
+    val contracts = mutableStateListOf<Contract>()
+    val contractsDone = mutableStateListOf<String>()
+    val fence = mutableStateListOf<Deal>()
+    /** Black-market boosters: runs left on each. */
+    var xpBoost by mutableIntStateOf(0)
+        private set
+    var creditBoost by mutableIntStateOf(0)
+        private set
+    var shieldBoost by mutableIntStateOf(0)
         private set
 
     var sounds by mutableStateOf(true)
@@ -119,8 +145,10 @@ object Game {
     private fun load() {
         credits = prefs.getInt("credits", 250)
         cores = prefs.getInt("cores", 3)
+        shards = prefs.getInt("shards", 0)
         xp = prefs.getLong("xp", 0)
         riftBest = prefs.getLong("riftBest", 0)
+        hubAt = prefs.getInt("hubAt", 0)
         sounds = prefs.getBoolean("sounds", true)
         music = prefs.getBoolean("music", true)
         volume = prefs.getFloat("volume", 0.8f)
@@ -135,6 +163,11 @@ object Game {
         readMap("upgrades") { k, j -> upgrades[k] = j.getInt(k) }
         readMap("stars") { k, j -> stars[k] = j.getInt(k) }
         readMap("best") { k, j -> best[k] = j.getLong(k) }
+        readMap("story") { k, j -> story[k] = j.getInt(k) }
+        contractsDone.addAll(prefs.getStringSet("contractsDone", emptySet())!!)
+        xpBoost = prefs.getInt("xpBoost", 0)
+        creditBoost = prefs.getInt("creditBoost", 0)
+        shieldBoost = prefs.getInt("shieldBoost", 0)
         owned.addAll(prefs.getStringSet("owned", emptySet())!!)
         medals.addAll(prefs.getStringSet("medals", emptySet())!!)
         loadout = runCatching { loadoutFrom(JSONObject(prefs.getString("loadout", null)!!)) }.getOrDefault(Loadout())
@@ -165,8 +198,27 @@ object Game {
             missions.addAll(Missions.daily(rnd, level, stats))
             prefs.edit().putString("missionDay", today.toString()).apply()
         }
+        rollBoards(today)
         checkMedals()
     }
+
+    /** Today's contracts (three per open sector) and fence deals. */
+    private fun rollBoards(today: LocalDate) {
+        contracts.clear()
+        contracts.addAll(Contracts.today(today, openSectors, Mode.entries.filter(::modeOpen)))
+        contractsDone.retainAll { it.startsWith("$today#") }
+        fence.clear()
+        fence.addAll(Market.fence(today, catalogue().filter { !owns(it.first, it.third) }))
+    }
+
+    /** The name of a catalogue item, from its key. */
+    fun itemTitle(key: String) = catalogue().firstOrNull { it.first == key }?.second ?: key.substringAfter(':').replace('_', ' ')
+
+    /** Everything the hangar sells: (key, title, price). */
+    fun catalogue(): List<Triple<String, String, Price>> =
+        Loadout.ALL_PARTS.values.flatten().map { Triple(it.key, it.title, it.price) } +
+            SWATCHES.map { Triple(it.key, it.title, it.price) } + Finish.entries.map { Triple(it.key, it.title, it.price) } +
+            Decal.entries.map { Triple(it.key, it.title, it.price) } + COSMETICS.map { Triple(it.key, it.title, it.price) }
 
     /** The daily supply drop's contents. */
     data class Supply(val credits: Int, val cores: Int, val streak: Int)
@@ -189,14 +241,25 @@ object Game {
     // ---- owning, buying, upgrading ----
 
     fun owns(key: String, price: Price) = price.free || key in owned
+    fun has(key: String) = key in owned
     fun owns(p: Part) = owns(p.key, p.price)
     fun owns(s: Swatch) = owns(s.key, s.price)
     fun owns(f: Finish) = owns(f.key, f.price)
     fun owns(d: Decal) = owns(d.key, d.price)
+    fun owns(c: Cosmetic) = owns(c.key, c.price)
+
+    /** Hands over something only a story can give (or anything else, for free). */
+    fun grant(key: String) {
+        if (key.isEmpty() || key in owned) return
+        owned += key
+        saveAll()
+    }
 
     fun canAfford(price: Price) = level >= price.level && when (price.currency) {
         Currency.CREDITS -> credits >= price.amount
         Currency.CORES -> cores >= price.amount
+        Currency.SHARDS -> shards >= price.amount
+        Currency.REWARD -> false
     }
 
     /** Buys whatever [key] names for [price]. Returns false if it's out of reach. */
@@ -206,6 +269,8 @@ object Game {
         when (price.currency) {
             Currency.CREDITS -> credits -= price.amount
             Currency.CORES -> cores -= price.amount
+            Currency.SHARDS -> shards -= price.amount
+            Currency.REWARD -> return false
         }
         owned += key
         if (key.substringBefore(':').uppercase() in Slot.entries.map { it.name }) stats[Stat.PARTS] = (stats[Stat.PARTS] ?: 0) + 1
@@ -258,7 +323,62 @@ object Game {
     fun sectorOpen(sector: Int) = sector == 0 ||
         ((stars[Stage(sector - 1, Campaign.STAGES - 1).id] ?: 0) > 0 && level >= Campaign.SECTORS[sector].gate)
 
+    /** Hub 0 is home; each further one opens with the boss of the sector before it. */
+    fun hubOpen(i: Int) = i == 0 || (i in Hubs.all.indices && (stars[Stage(i - 1, Campaign.STAGES - 1).id] ?: 0) > 0)
+
+    val hubsOpen get() = Hubs.all.indices.count(::hubOpen)
+
+    val hubTheme get() = Hubs.all[hubAt.takeIf(::hubOpen) ?: 0]
+
+    /** Jumps the operation to hub [i], if it's open. */
+    fun moveHub(i: Int) {
+        if (!hubOpen(i) || i == hubAt) return
+        hubAt = i
+        saveAll()
+    }
+
     val riftOpen get() = (stars[Campaign.RIFT_UNLOCK.id] ?: 0) > 0
+
+    val openSectors get() = Campaign.SECTORS.indices.count(::sectorOpen)
+
+    // ---- the mission modes ----
+
+    fun modeOpen(m: Mode) = level >= m.level
+
+    fun chaptersDone(m: Mode) = story[m.name] ?: 0
+
+    /** A chapter is open once the one before it is done (and the mode is). */
+    fun chapterOpen(c: Chapter) = modeOpen(c.mode) && c.index <= chaptersDone(c.mode)
+
+    fun storiesDone() = Mode.entries.count { chaptersDone(it) >= Stories.CHAPTERS }
+
+    // ---- the black market ----
+
+    fun canBuy(d: Deal) = level >= d.level && shards >= d.shards && (d.key == null || d.key !in owned)
+
+    fun buyDeal(d: Deal): Boolean {
+        if (!canBuy(d)) return false
+        shards -= d.shards
+        when (d.id) {
+            "cores" -> cores += 5
+            "bigcores" -> cores += 25
+            "credits" -> credits += 5000
+            "xp2" -> xpBoost += Market.BOOST_RUNS
+            "cr2" -> creditBoost += Market.BOOST_RUNS
+            "shield" -> shieldBoost += Market.BOOST_RUNS
+            else -> d.key?.let { owned += it; fence.remove(d) }
+        }
+        saveAll()
+        return true
+    }
+
+    /** Uses up one run of the shield booster; true if there was one. */
+    fun takeShield(): Boolean {
+        if (shieldBoost <= 0) return false
+        shieldBoost--
+        saveAll()
+        return true
+    }
 
     /** The stage to offer next: the first one not yet cleared, or the last one. */
     fun nextStage(): Stage = Campaign.allStages.firstOrNull { unlocked(it) && (stars[it.id] ?: 0) == 0 } ?: Campaign.allStages.last { unlocked(it) }
@@ -276,6 +396,7 @@ object Game {
     /** Banks a finished run (cleared, lost or quit) and works out its reward. */
     fun finishRun(r: RunResult): Outcome {
         val before = level
+        val sectorsBefore = openSectors
         add(Stat.RUNS)
         add(Stat.KILLS, r.kills.toLong())
         add(Stat.ROCKS, r.rocks.toLong())
@@ -287,14 +408,51 @@ object Game {
         add(Stat.SECONDS, r.seconds.toLong())
         add(Stat.COMBO_25, r.chains25.toLong())
         best(Stat.BEST_COMBO, r.bestChain.toLong())
-        if (!r.cleared && r.stage != null) add(Stat.DEATHS)
+        if (!r.cleared && (r.stage != null || r.spec != null)) add(Stat.DEATHS)
 
         var stars = 0
         var firstClear = false
         var newBest = false
-        val reward: Reward
+        var reward: Reward
+        var unlocked: String? = null
+        var contractDone = false
         val s = r.stage
-        if (s == null) {
+        val spec = r.spec
+        if (spec != null) {
+            reward = MissionSpec.reward(spec, r.cleared)
+            val bestKey = "mode:${spec.mode.name}"
+            newBest = r.score > (best[bestKey] ?: 0L)
+            if (newBest) best[bestKey] = r.score
+            when (spec.mode) {
+                Mode.EXPLORATION -> add(Stat.BEACONS, r.objective.toLong())
+                Mode.MINING -> add(Stat.ORE, r.objective.toLong())
+                Mode.SALVAGE -> add(Stat.PODS, r.objective.toLong())
+                else -> Unit
+            }
+            if (r.cleared) {
+                add(Stat.MODE_CLEARS)
+                stars = if (r.hullLeft >= 0.6f) 3 else if (r.hullLeft >= 0.3f) 2 else 1
+                val ch = spec.storyId?.let(Stories::chapter)
+                if (ch != null && chaptersDone(ch.mode) == ch.index) {
+                    firstClear = true
+                    story[ch.mode.name] = ch.index + 1
+                    reward = reward.plus(ch.reward)
+                    add(Stat.CHAPTERS)
+                    ch.unlock?.let { owned += it; unlocked = it }
+                    if (storiesDone() == Mode.entries.size && Stories.LAST_LIGHT !in owned) {
+                        owned += Stories.LAST_LIGHT
+                        if (unlocked == null) unlocked = Stories.LAST_LIGHT
+                    }
+                }
+                val c = spec.contractId?.let { id -> contracts.firstOrNull { it.id == id } }
+                if (c != null && c.id !in contractsDone) {
+                    contractDone = true
+                    contractsDone += c.id
+                    reward = reward.plus(Reward(c.credits, c.xp, 0, c.shards))
+                    add(Stat.CONTRACTS)
+                }
+            }
+        } else if (s == null) {
             best(Stat.RIFT_BEST_SECONDS, r.seconds.toLong())
             newBest = r.score > riftBest
             if (newBest) riftBest = r.score
@@ -311,18 +469,25 @@ object Game {
             add(Stat.CLEARS)
             if (stars == 3 && had < 3) add(Stat.PERFECT)
             if (r.hits == 0) add(Stat.NO_HIT)
+            if (s.isBoss && s.sector == Campaign.SECTORS.size - 1) owned += "title:heartbreaker"
+            // Beating a sector moves the operation on to the next hub.
+            if (s.isBoss && firstClear && hubAt < s.sector + 1) hubAt = s.sector + 1
         } else {
             // A lost run still pays a little XP, so every attempt moves the pilot forward.
             reward = Reward(0, 15 + r.kills / 4, 0)
         }
+        if (creditBoost > 0) { creditBoost--; reward = reward.copy(credits = reward.credits * 2 + r.credits) }
+        if (xpBoost > 0) { xpBoost--; reward = reward.copy(xp = reward.xp * 2) }
         credits += r.credits + reward.credits
         cores += reward.cores
+        shards += reward.shards
         add(Stat.CREDITS, (r.credits + reward.credits).toLong())
         gainXp(reward.xp + r.kills / 2)
         checkMissions()
         checkMedals()
+        if (level != before || openSectors != sectorsBefore) rollBoards(LocalDate.now())
         saveAll()
-        return Outcome(r, stars, reward, firstClear, newBest, before, level)
+        return Outcome(r, stars, reward, firstClear, newBest, before, level, unlocked, contractDone)
     }
 
     private fun gainXp(n: Int) {
@@ -381,11 +546,14 @@ object Game {
     fun saveAll() {
         saveSettings()
         prefs.edit()
-            .putInt("credits", credits).putInt("cores", cores).putLong("xp", xp).putLong("riftBest", riftBest)
+            .putInt("credits", credits).putInt("cores", cores).putInt("shards", shards).putLong("xp", xp).putLong("riftBest", riftBest).putInt("hubAt", hubAt)
             .putString("stats", JSONObject(stats.toMap()).toString())
             .putString("upgrades", JSONObject(upgrades.toMap()).toString())
             .putString("stars", JSONObject(stars.toMap()).toString())
             .putString("best", JSONObject(best.toMap()).toString())
+            .putString("story", JSONObject(story.toMap()).toString())
+            .putStringSet("contractsDone", contractsDone.toSet())
+            .putInt("xpBoost", xpBoost).putInt("creditBoost", creditBoost).putInt("shieldBoost", shieldBoost)
             .putStringSet("owned", owned.toSet())
             .putStringSet("medals", medals.toSet())
             .putString("loadout", loadoutJson(loadout).toString())
@@ -400,6 +568,7 @@ object Game {
         prefs.all.keys.filter { it !in keep }.forEach { e.remove(it) }
         e.commit()
         stats.clear(); owned.clear(); upgrades.clear(); stars.clear(); best.clear(); medals.clear(); missions.clear()
+        story.clear(); contracts.clear(); contractsDone.clear(); fence.clear()
         load()
         visit()
         saveAll()
@@ -410,6 +579,8 @@ object Game {
         .put("primary", l.primary.name).put("support", l.support.name).put("special", l.special.name)
         .put("c1", l.paint.primary).put("c2", l.paint.secondary).put("c3", l.paint.glow)
         .put("finish", l.paint.finish.name).put("decal", l.paint.decal.name)
+        .put("trail", l.paint.trail).put("shot", l.paint.shot).put("burst", l.paint.burst)
+        .put("title", l.paint.title).put("emblem", l.paint.emblem)
         .put("backup", l.backup?.name ?: "")
 
     fun loadoutFrom(j: JSONObject): Loadout {
@@ -422,6 +593,8 @@ object Game {
             Paint(
                 j.optString("c1", d.paint.primary), j.optString("c2", d.paint.secondary), j.optString("c3", d.paint.glow),
                 e(Finish.entries, "finish", d.paint.finish), e(Decal.entries, "decal", d.paint.decal),
+                j.optString("trail", d.paint.trail), j.optString("shot", d.paint.shot), j.optString("burst", d.paint.burst),
+                j.optString("title", d.paint.title), j.optString("emblem", d.paint.emblem),
             ),
             Primary.entries.firstOrNull { it.name == j.optString("backup") && it != primary },
         )

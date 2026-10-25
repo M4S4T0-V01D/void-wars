@@ -52,6 +52,7 @@ import dev.m4s4t0.voidwars.audio.Haptics
 import dev.m4s4t0.voidwars.audio.Snd
 import dev.m4s4t0.voidwars.model.Currency
 import dev.m4s4t0.voidwars.model.Game
+import dev.m4s4t0.voidwars.model.Look
 import dev.m4s4t0.voidwars.model.Levels
 import dev.m4s4t0.voidwars.model.Price
 import dev.m4s4t0.voidui.Void
@@ -59,6 +60,7 @@ import dev.m4s4t0.voidui.Void
 /** Gold for credits, and the cores' violet-cyan. */
 val CREDIT = Color(0xFFFFC23D)
 val CORE = Color(0xFFB98CFF)
+val SHARD = Color(0xFFE070FF)
 
 fun argbColor(argb: Long) = Color(argb.toInt())
 
@@ -112,9 +114,9 @@ fun fmt(n: Int): String = "%,d".format(n)
 /** An amount of credits or cores with its icon. */
 @Composable
 fun Money(amount: Long, currency: Currency = Currency.CREDITS, modifier: Modifier = Modifier, fontSize: TextUnit = 14.sp, icon: Dp = 16.dp, dimmed: Boolean = false) {
-    val c = if (currency == Currency.CREDITS) CREDIT else CORE
+    val c = when (currency) { Currency.CREDITS -> CREDIT; Currency.SHARDS -> SHARD; else -> CORE }
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Glyph(if (currency == Currency.CREDITS) "credit" else "core", icon, color = c, glow = false)
+        Glyph(when (currency) { Currency.CREDITS -> "credit"; Currency.SHARDS -> "shard"; else -> "core" }, icon, color = c, glow = false)
         Text(fmt(amount), color = if (dimmed) c.copy(alpha = 0.5f) else c, fontSize = fontSize, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
@@ -122,7 +124,11 @@ fun Money(amount: Long, currency: Currency = Currency.CREDITS, modifier: Modifie
 /** What something costs, or the level it opens at if the pilot isn't there yet. */
 @Composable
 fun PriceTag(price: Price, modifier: Modifier = Modifier, fontSize: TextUnit = 12.sp) {
-    if (Game.level < price.level) LevelTag(price.level, modifier, fontSize)
+    if (price.currency == Currency.REWARD) Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Glyph("lock", (fontSize.value + 2).dp, color = Void.dim, glow = false)
+        Text("Story", color = Void.dim, fontSize = fontSize, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
+    else if (Game.level < price.level) LevelTag(price.level, modifier, fontSize)
     else Money(price.amount.toLong(), price.currency, modifier, fontSize, (fontSize.value + 2).dp, dimmed = !Game.canAfford(price))
 }
 
@@ -133,9 +139,9 @@ fun Stars(n: Int, of: Int = 3, size: Dp = 18.dp) {
     }
 }
 
-/** The wallet: credits and cores on glass. */
+/** The wallet: credits and cores on glass, and void shards once the pilot has some. */
 @Composable
-fun WalletChip(modifier: Modifier = Modifier) {
+fun WalletChip(modifier: Modifier = Modifier, shards: Boolean = Game.shards > 0) {
     Row(
         modifier.glass(RoundedCornerShape(50), alpha = 0.85f).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -143,6 +149,7 @@ fun WalletChip(modifier: Modifier = Modifier) {
     ) {
         Money(Game.credits.toLong(), Currency.CREDITS, fontSize = 15.sp, icon = 18.dp)
         Money(Game.cores.toLong(), Currency.CORES, fontSize = 15.sp, icon = 18.dp)
+        if (shards) Money(Game.shards.toLong(), Currency.SHARDS, fontSize = 15.sp, icon = 18.dp)
     }
 }
 
@@ -154,8 +161,11 @@ fun LevelChip(modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Glyph("level", 18.dp, color = Void.violet, glow = false)
+        val paint = Game.loadout.paint
+        val emblem = paint.emblem
+        Glyph(if (emblem == "none") "level" else emblem, 18.dp, color = Void.violet, glow = emblem != "none")
         Text("Lv $lvl", color = Void.text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(paint.look(Look.TITLE).title, color = Void.dim, fontSize = 12.sp, maxLines = 1)
         Bar(into.toFloat() / need, Modifier.width(56.dp), 6.dp)
     }
 }

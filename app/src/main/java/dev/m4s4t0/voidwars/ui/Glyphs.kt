@@ -140,6 +140,37 @@ fun DrawScope.glyph(name: String, color: Color, glow: Boolean = true) {
             "speed" -> { arc(12f, 14f, 9f, 180f, 180f); line(12f, 14f, 17f, 8f); circle(12f, 14f, 1.4f, true) }
             "fire" -> line(12f, 21f, 7f, 17f, 7f, 12f, 10f, 8f, 10f, 12f, 13f, 3f, 17f, 10f, 17f, 17f, close = true)
             "magnet" -> { line(6f, 4f, 6f, 13f); arc(12f, 13f, 6f, 0f, 180f); line(18f, 13f, 18f, 4f); line(4f, 7f, 8f, 7f); line(16f, 7f, 20f, 7f) }
+            "contract" -> { line(5f, 3f, 15f, 3f, 19f, 7f, 19f, 21f, 5f, 21f, close = true); line(15f, 3f, 15f, 7f, 19f, 7f); line(8f, 10f, 15f, 10f); line(8f, 13.5f, 15f, 13.5f); line(8f, 17.5f, 10f, 15.5f, 11.5f, 17.5f, 13.5f, 16f) }
+            "market" -> { line(3f, 9f, 5f, 4f, 19f, 4f, 21f, 9f, close = true); line(5f, 9f, 5f, 20f, 19f, 20f, 19f, 9f); line(10f, 20f, 10f, 14f, 14f, 14f, 14f, 20f); circle(8f, 9f, 1.2f, true); circle(16f, 9f, 1.2f, true) }
+            "shard", "shards" -> { fill(12f, 2f, 18f, 10f, 12f, 22f, 6f, 10f, alpha = 0.35f); line(12f, 2f, 18f, 10f, 12f, 22f, 6f, 10f, close = true); line(6f, 10f, 18f, 10f); line(12f, 2f, 12f, 22f, width = 0.8f) }
+            "beacon" -> { line(12f, 10f, 8f, 21f); line(12f, 10f, 16f, 21f); line(9.5f, 17f, 14.5f, 17f); circle(12f, 8f, 2f, true); arc(12f, 8f, 5f, -150f, 120f); arc(12f, 8f, 8.5f, -150f, 120f) }
+            "escort" -> { line(4f, 14f, 8f, 10f, 14f, 10f, 14f, 18f, 8f, 18f, close = true); line(14f, 12f, 18f, 12f, 20f, 14f, 20f, 18f, 14f, 18f); line(7f, 6f, 12f, 3f, 17f, 6f); line(12f, 3f, 12f, 7f) }
+            "salvage" -> { line(12f, 2f, 12f, 9f); arc(12f, 14f, 5f, 200f, 320f); line(12f, 9f, 12f, 19f); line(7f, 14f, 4f, 14f); line(17f, 14f, 20f, 14f); circle(12f, 4f, 1.4f, true) }
+            "ore" -> { ngon(12f, 13f, 8f, 6, 0.3f); fill(9f, 11f, 13f, 9f, 15f, 13f, 11f, 16f, alpha = 0.5f); line(4.5f, 9f, 9f, 11f); line(15f, 13f, 19.5f, 16f) }
+            "defense" -> { line(12f, 2f, 20f, 5f, 20f, 12f, 12f, 22f, 4f, 12f, 4f, 5f, close = true); line(8f, 11f, 16f, 11f); line(12f, 7f, 12f, 16f) }
+            "ace" -> { line(12f, 3f, 14.5f, 10f, 22f, 12f, 14.5f, 14f, 12f, 21f, 9.5f, 14f, 2f, 12f, 9.5f, 10f, close = true); circle(12f, 12f, 2f, true) }
+            "boost" -> { line(4f, 6f, 10f, 12f, 4f, 18f); line(10f, 6f, 16f, 12f, 10f, 18f); line(16f, 6f, 22f, 12f, 16f, 18f) }
+            "dock" -> { circle(12f, 12f, 8.5f); circle(12f, 12f, 3f, true); line(12f, 1f, 12f, 5f); line(12f, 19f, 12f, 23f); line(1f, 12f, 5f, 12f); line(19f, 12f, 23f, 12f) }
+            "crown" -> { line(3f, 18f, 3f, 7f, 8f, 12f, 12f, 4f, 16f, 12f, 21f, 7f, 21f, 18f, close = true); line(3f, 21f, 21f, 21f); circle(12f, 14f, 1.5f, true) }
+            "moon" -> { arc(12f, 12f, 9f, 60f, 240f); arc(16f, 9f, 7.5f, 95f, 175f) }
+            "eye" -> { arc(12f, 20f, 11f, 213f, 114f); arc(12f, 4f, 11f, 33f, 114f); circle(12f, 12f, 3.5f); circle(12f, 12f, 1.4f, true) }
+            "diamond" -> { line(6f, 4f, 18f, 4f, 22f, 9f, 12f, 21f, 2f, 9f, close = true); line(2f, 9f, 22f, 9f); line(9f, 4f, 12f, 21f, 15f, 4f) }
+            "atom" -> {
+                circle(12f, 12f, 1.8f, true)
+                for (r in 0 until 3) {
+                    val q = r * 1.047f
+                    line(*FloatArray(48) { k -> val a = (k / 2) * 0.2732f; val x = kotlin.math.cos(a) * 9.5f; val y = kotlin.math.sin(a) * 3.4f; if (k % 2 == 0) 12f + x * kotlin.math.cos(q) - y * kotlin.math.sin(q) else 12f + x * kotlin.math.sin(q) + y * kotlin.math.cos(q) }, close = true)
+                }
+            }
+            "spiral" -> { arc(12f, 12f, 2f, 0f, 180f); arc(11f, 12f, 3f, 180f, 180f); arc(12f, 12f, 4f, 0f, 180f); arc(11f, 12f, 5f, 180f, 180f); arc(12f, 12f, 6f, 0f, 180f); arc(11f, 12f, 7f, 180f, 180f); arc(12f, 12f, 8f, 0f, 180f) }
+            "sword" -> { line(19f, 3f, 21f, 3f, 21f, 5f, 9f, 17f, 7f, 15f, close = true); line(5f, 13f, 11f, 19f); line(7f, 17f, 3f, 21f) }
+            "wing" -> { line(3f, 18f, 8f, 8f, 21f, 4f, 17f, 9f, 20f, 9f, 15f, 13f, 18f, 13f, 12f, 17f, close = true); line(8f, 8f, 12f, 17f) }
+            "close" -> { line(6f, 6f, 18f, 18f); line(18f, 6f, 6f, 18f) }
+            "trail" -> { line(3f, 18f, 9f, 15f, 14f, 15f, width = 0.8f); line(3f, 13f, 9f, 12f, 14f, 12f, width = 0.8f); fill(14f, 9f, 22f, 12f, 14f, 18f, alpha = 0.5f); line(14f, 9f, 22f, 12f, 14f, 18f, close = true) }
+            "shot" -> { line(4f, 20f, 12f, 12f, width = 0.9f); line(9f, 20f, 15f, 14f, width = 0.6f); circle(16f, 8f, 3.5f, true); circle(16f, 8f, 6f) }
+            "burst" -> { circle(12f, 12f, 3f, true); for (i in 0 until 8) { val a = i * PI.toFloat() / 4; line(12f + cos(a) * 5.5f, 12f + sin(a) * 5.5f, 12f + cos(a) * 10f, 12f + sin(a) * 10f) } }
+            "title" -> { line(3f, 7f, 21f, 7f, 21f, 17f, 3f, 17f, close = true); line(6f, 11f, 12f, 11f); line(6f, 14f, 16f, 14f); star(18f, 11f, 2f, true) }
+            "emblem" -> { ngon(12f, 12f, 9.5f, 6, 0f); star(12f, 12f, 5f, true) }
             else -> star(12f, 12.5f, 9f, false)
         }
     }
